@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureRedact PDF | Premium B2B Document Sanitizer</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Main App Container -->
+    <div id="app" class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo" id="headerLogo" style="cursor: pointer;">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>SecureRedact <span>PDF</span></h1>
+                    <p class="tagline">B2B Document Sanitization & Redaction</p>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <div class="security-badge">
+                    <span class="status-dot green"></span>
+                    <span class="status-text">Secure Local Mode</span>
+                </div>
+                <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Theme">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body -->
+        <main class="app-main">
+            
+            <!-- Tool Selection Dashboard -->
+            <section id="dashboardSection" class="dashboard-section">
+                <div class="dashboard-hero">
+                    <h2>Select a Secure PDF Tool</h2>
+                    <p class="dashboard-subtitle">All processing occurs locally in your browser. Files are auto-purged from ephemeral session directories.</p>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <!-- Tool Card: Sanitize -->
+                    <div class="dashboard-card" id="toolSanitizeCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <h3>Sanitize & Redact</h3>
+                        <p>Automatically scan and redact sensitive PII (emails, phones, SSNs, credit cards) and clean hidden metadata.</p>
+                        <button class="btn-primary card-btn">Launch Sanitize</button>
+                    </div>
+
+                    <!-- Tool Card: Merge -->
+                    <div class="dashboard-card" id="toolMergeCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-object-group"></i>
+                        </div>
+                        <h3>Merge PDFs</h3>
+                        <p>Combine multiple PDF documents into a single, perfectly sequenced file with easy drag-and-drop ordering.</p>
+                        <button class="btn-primary card-btn">Launch Merge</button>
+                    </div>
+
+                    <!-- Tool Card: Split -->
+                    <div class="dashboard-card" id="toolSplitCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-scissors"></i>
+                        </div>
+                        <h3>Split PDF</h3>
+                        <p>visually extract selected pages or split a PDF document into multiple separate parts using page ranges.</p>
+                        <button class="btn-primary card-btn">Launch Split</button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Upload State (Sanitize) -->
+            <section id="uploadSection" class="upload-section hidden">
+                <div class="upload-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </div>
+                    <h2>Sanitize Client Documents</h2>
+                    <p class="upload-subtitle">Upload sensitive PDF reports, invoices, or contracts. Automatically detect and strip PII before external delivery.</p>
+                    
+                    <div id="dropZone" class="drop-zone">
+                        <input type="file" id="fileInput" accept=".pdf" class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop your client PDF here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Supports documents up to 50MB</p>
+                    </div>
+
+                    <div class="features-grid">
+                        <div class="feature-item">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <h4>AI & Pattern Detection</h4>
+                            <p>Emails, Phones, SSNs, EINs, Credit Cards matched instantly.</p>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fa-solid fa-user-slash"></i>
+                            <h4>Permanent Redaction</h4>
+                            <p>Erases raw text streams, not just visual covers.</p>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fa-solid fa-broom"></i>
+                            <h4>Metadata Stripper</h4>
+                            <p>Cleans author details, creation dates, and edit history.</p>
+                        </div>
+                    </div>
+
+                    <div class="security-notice">
+                        <i class="fa-solid fa-lock"></i>
+                        <span><strong>Privacy Guarantee:</strong> Files are processed locally, stored in ephemeral session folders, and auto-purged from disk.</span>
+                    </div>
+                    
+                    <button id="sanitizeBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+            </section>
+
+            <!-- Workspace State (Initially Hidden) -->
+            <section id="workspaceSection" class="workspace-section hidden">
+
+                <!-- Center Panel: Interactive PDF Canvas -->
+                <div class="workspace-center">
+                    <div class="viewer-toolbar">
+                        <div class="toolbar-left">
+                            <button id="toggleThumbnailsBtn" class="toolbar-btn" title="Toggle Sidebar">
+                                <i class="fa-solid fa-bars"></i>
+                            </button>
+                            <span class="doc-title-display"><i class="fa-solid fa-file-pdf"></i> <span id="fileNameDisplay">document.pdf</span></span>
+                        </div>
+                        <div class="toolbar-center">
+                            <button id="prevPageBtn" class="toolbar-btn" title="Previous Page">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <span class="page-indicator">Page <span id="currentPageNum">1</span> of <span id="totalPagesNum">1</span></span>
+                            <button id="nextPageBtn" class="toolbar-btn" title="Next Page">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="toolbar-right">
+                            <!-- Consolidated Zoom Controls -->
+                            <div class="toolbar-zoom-group">
+                                <button id="zoomOutBtn" class="toolbar-btn" title="Zoom Out">
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
+                                <span id="zoomDisplay" class="zoom-value-display">100%</span>
+                                <button id="zoomInBtn" class="toolbar-btn" title="Zoom In">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                                <div class="toolbar-divider"></div>
+                                <button id="fitWidthBtn" class="toolbar-btn" title="Fit to Width">
+                                    <i class="fa-solid fa-arrows-left-right"></i>
+                                </button>
+                                <button id="fitPageBtn" class="toolbar-btn" title="Fit to Page">
+                                    <i class="fa-solid fa-expand"></i>
+                                </button>
+                            </div>
+                            <div class="toolbar-divider"></div>
+                            <button id="clearAllRedactionsBtn" class="toolbar-btn-danger" title="Clear all redactions">
+                                <i class="fa-solid fa-trash-can"></i> Clear
+                            </button>
+                            <button id="toggleRightSidebarBtn" class="toolbar-btn mobile-only-btn" title="Toggle Sidebar">
+                                <i class="fa-solid fa-sliders"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Inner Workspace containing Sidebar + Viewer -->
+                    <div class="workspace-inner-layout">
+                        <!-- Click-to-dismiss Backdrop overlay for mobile drawers -->
+                        <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
+
+                        <!-- Collapsible Page Thumbnail Sidebar -->
+                        <aside id="thumbnailSidebar" class="thumbnail-sidebar">
+                            <div class="thumbnail-sidebar-content" id="thumbnailSidebarContent">
+                                <!-- Dynamic thumbnails will render here -->
+                            </div>
+                        </aside>
+
+                        <!-- PDF Viewer Container -->
+                        <div class="pdf-viewer-outer">
+                            <div id="pdfViewer" class="pdf-viewer-inner">
+                                <!-- Dynamic PDF pages will render here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Unified Right Sidebar: findings, search, settings, and actions -->
+                <aside class="sidebar-right">
+                    <div class="sidebar-header">
+                        <h3>Control Center</h3>
+                        <button class="sidebar-close-btn mobile-only-btn" id="closeRightSidebarBtn" title="Close Sidebar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <!-- Tabs Navigation -->
+                    <div class="sidebar-tabs">
+                        <button id="aiFindingsTab" class="sidebar-tab-btn active" data-tab="ai-findings">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Findings
+                            <span id="totalFindingsBadge" class="findings-count-badge">0</span>
+                        </button>
+                        <button id="manualSearchTab" class="sidebar-tab-btn" data-tab="manual-search">
+                            <i class="fa-solid fa-magnifying-glass"></i> Search
+                        </button>
+                        <button id="settingsExportTab" class="sidebar-tab-btn" data-tab="settings-export">
+                            <i class="fa-solid fa-sliders"></i> Settings
+                        </button>
+                    </div>
+
+                    <div class="sidebar-tab-container">
+                        <!-- Tab Content 1: AI Findings -->
+                        <div id="aiFindingsContent" class="tab-content-pane active">
+                            <div id="findingsContainer" class="findings-container">
+                                <!-- Dynamic findings categories go here -->
+                                <div class="sidebar-empty-state">
+                                    <i class="fa-solid fa-magnifying-glass-chart"></i>
+                                    <p>Scanning PDF contents...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content 2: Manual Search -->
+                        <div id="manualSearchContent" class="tab-content-pane">
+                            <div class="search-tool-container">
+                                <div class="search-input-wrapper">
+                                    <div class="search-input-field-group">
+                                        <input type="text" id="searchInput" placeholder="Enter keyword to redact...">
+                                        <button id="regexToggleBtn" class="regex-toggle-btn" title="Toggle Regular Expression (.*)">
+                                            <span>.*</span>
+                                        </button>
+                                    </div>
+                                    <button id="searchBtn" class="search-btn" title="Run Search">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                    </button>
+                                </div>
+                                
+                                <!-- Custom Search Results List -->
+                                <div id="searchResultsContainer" class="search-results-container">
+                                    <div class="sidebar-empty-state">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <p>Run a search to find custom terms.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab Content 3: Settings & Export -->
+                        <div id="settingsExportContent" class="tab-content-pane">
+                            <div class="sidebar-right-content">
+                                <div class="settings-card">
+                                    <h4><i class="fa-solid fa-tags"></i> Document Metadata</h4>
+                                    <p class="settings-description">Remove hidden identifiers embedded inside the PDF file structure.</p>
+                                    
+                                    <div class="settings-options">
+                                        <div class="settings-row">
+                                            <div class="settings-row-label">
+                                                <strong>Strip Document Metadata</strong>
+                                                <span class="sub-label">Cleans Title, Author, Creator, Subject, dates, and signatures.</span>
+                                            </div>
+                                            <label class="switch">
+                                                <input type="checkbox" id="stripMetadataCheckbox" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="settings-card">
+                                    <h4><i class="fa-solid fa-circle-info"></i> Document Properties</h4>
+                                    <div class="properties-list">
+                                        <div class="prop-row">
+                                            <span class="prop-label">File Name:</span>
+                                            <span id="propFileName" class="prop-val">-</span>
+                                        </div>
+                                        <div class="prop-row">
+                                            <span class="prop-label">Page Count:</span>
+                                            <span id="propPageCount" class="prop-val">-</span>
+                                        </div>
+                                        <div class="prop-row">
+                                            <span class="prop-label">Total Redactions:</span>
+                                            <span id="propRedactionsCount" class="prop-val">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Redaction Help Card -->
+                                <div class="help-card">
+                                    <h4><i class="fa-solid fa-mouse-pointer"></i> Manual Redaction</h4>
+                                    <p>Need to redact specific items? Simply <strong>click and drag</strong> your mouse directly over any part of the PDF page to blackout text, tables, or logos.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Button Container -->
+                    <div class="action-container">
+                        <button id="sanitizeBtn" class="btn-primary btn-large">
+                            <span class="btn-text"><i class="fa-solid fa-circle-check"></i> Sanitize & Download</span>
+                            <span class="btn-loader hidden"><i class="fa-solid fa-spinner fa-spin"></i> Processing...</span>
+                        </button>
+                        <button id="closeWorkspaceBtn" class="btn-secondary btn-large">
+                            <i class="fa-solid fa-xmark"></i> Close Document
+                        </button>
+                    </div>
+                </aside>
+
+            </section>
+
+            <!-- Merge PDFs Workspace (Initially Hidden) -->
+            <section id="mergeSection" class="merge-section hidden">
+                <div class="merge-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-object-group"></i>
+                    </div>
+                    <h2>Merge PDF Documents</h2>
+                    <p class="upload-subtitle">Combine multiple PDF files into a single, perfectly sequenced document.</p>
+                    
+                    <!-- Drop Zone for Merge -->
+                    <div id="mergeDropZone" class="drop-zone">
+                        <input type="file" id="mergeFileInput" accept=".pdf" multiple class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop multiple PDFs here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Arrange them in any order before combining</p>
+                    </div>
+
+                    <!-- File List Area -->
+                    <div id="mergeFileListContainer" class="merge-file-list-container hidden">
+                        <h3>Files to Combine</h3>
+                        <div id="mergeFileList" class="merge-file-list">
+                            <!-- Dynamically populated files -->
+                        </div>
+                        
+                        <!-- Merge Actions -->
+                        <div class="merge-actions">
+                            <button id="executeMergeBtn" class="btn-primary btn-large">
+                                <span class="btn-text"><i class="fa-solid fa-object-group"></i> Merge & Download</span>
+                                <span class="btn-loader hidden"><i class="fa-solid fa-spinner fa-spin"></i> Merging...</span>
+                            </button>
+                            <button id="clearMergeBtn" class="btn-secondary btn-large">
+                                <i class="fa-solid fa-trash-can"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button id="mergeBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+            </section>
+
+            <!-- Split PDF Workspace (Initially Hidden) -->
+            <section id="splitSection" class="split-section hidden">
+                <!-- Split Upload Phase -->
+                <div id="splitUploadCard" class="split-upload-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-scissors"></i>
+                    </div>
+                    <h2>Split PDF Document</h2>
+                    <p class="upload-subtitle">Upload a PDF to extract selected pages or divide it into multiple files visually.</p>
+                    
+                    <div id="splitDropZone" class="drop-zone">
+                        <input type="file" id="splitFileInput" accept=".pdf" class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop your PDF here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Supports documents up to 50MB</p>
+                    </div>
+                    
+                    <button id="splitBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+
+                <!-- Split Workspace Phase (Initially Hidden) -->
+                <div id="splitWorkspaceContainer" class="split-workspace-container hidden">
+                    <!-- Split Toolbar -->
+                    <div class="split-toolbar">
+                        <div class="split-toolbar-left">
+                            <span class="split-doc-title"><i class="fa-solid fa-scissors"></i> Splitting: <span id="splitFileNameDisplay">document.pdf</span></span>
+                        </div>
+                        <div class="split-toolbar-center">
+                            <!-- Mode Selector Buttons -->
+                            <div class="split-mode-selector">
+                                <button id="splitModeExtractBtn" class="split-mode-btn active">
+                                    <i class="fa-solid fa-square-check"></i> Extract Selected Pages
+                                </button>
+                                <button id="splitModePartsBtn" class="split-mode-btn">
+                                    <i class="fa-solid fa-scissors"></i> Split into Parts
+                                </button>
+                            </div>
+                        </div>
+                        <div class="split-toolbar-right">
+                            <button id="closeSplitWorkspaceBtn" class="toolbar-btn" title="Close Splitter">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Workspace -->
+                    <div class="split-workspace-inner">
+                        <!-- Sidebar Guide / controls -->
+                        <div class="split-control-sidebar">
+                            <div class="split-guide-card">
+                                <h4 id="splitGuideTitle"><i class="fa-solid fa-circle-info"></i> How to Extract</h4>
+                                <p id="splitGuideText">Check the checkbox on the top-right corner of each page preview you wish to extract. Only checked pages will be combined into your new PDF.</p>
+                            </div>
+                            
+                            <div class="split-selection-summary">
+                                <h4>Selection Summary</h4>
+                                <div class="properties-list">
+                                    <div class="prop-row">
+                                        <span class="prop-label">Total Pages:</span>
+                                        <span id="splitTotalPagesVal" class="prop-val">0</span>
+                                    </div>
+                                    <div class="prop-row">
+                                        <span class="prop-label">Target Count:</span>
+                                        <span id="splitTargetCountVal" class="prop-val">0 selected</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Range inputs for Split into Parts -->
+                            <div id="splitPartsRangeGroup" class="split-parts-range-group hidden">
+                                <h4>Define Split Parts</h4>
+                                <p class="settings-description">Specify comma-separated page ranges. Each range creates a separate PDF (e.g. 1-2, 3-5).</p>
+                                <input type="text" id="splitPartsInput" placeholder="e.g. 1-3, 4-5" class="split-range-input">
+                            </div>
+
+                            <div class="split-action-buttons">
+                                <button id="executeSplitBtn" class="btn-primary btn-large">
+                                    <span class="btn-text"><i class="fa-solid fa-scissors"></i> Split & Download</span>
+                                    <span class="btn-loader hidden"><i class="fa-solid fa-spinner fa-spin"></i> Processing...</span>
+                                </button>
+                                <button id="clearSplitBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-rotate-left"></i> Clear Selection
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Thumbnail Grid Area -->
+                        <div class="split-grid-viewport">
+                            <div id="splitThumbnailGrid" class="split-thumbnail-grid">
+                                <!-- Page cards with gutters dynamically rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+        
+        <!-- Global Loading Modal (Initial uploads) -->
+        <div id="loadingModal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <i class="fa-solid fa-shield-halved fa-spin loading-logo"></i>
+                <h3 id="loadingText">Processing Document...</h3>
+                <p>Analyzing document layers, extracting text layout, and preparing interactive pages. Please wait.</p>
+                <div class="progress-bar-container">
+                    <div id="loadingProgressBar" class="progress-bar" style="width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Main JavaScript File -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
