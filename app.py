@@ -129,6 +129,30 @@ class SplitPartsRequest(BaseModel):
     session_id: str
     parts: List[List[int]]
 
+class SecurityUnlockRequest(BaseModel):
+    session_id: str
+    password: str
+
+class SecurityProtectRequest(BaseModel):
+    session_id: str
+    user_password: str = ""
+    owner_password: str = ""
+    prevent_print: bool = False
+    prevent_copy: bool = False
+    prevent_modify: bool = False
+
+class CompressRequest(BaseModel):
+    session_id: str
+    level: str
+
+class OrganizePageItem(BaseModel):
+    page_num: int
+    rotation: int
+
+class OrganizeRequest(BaseModel):
+    session_id: str
+    pages: List[OrganizePageItem]
+
 @app.post("/api/upload")
 async def upload_pdf(file: UploadFile = File(...)):
     cleanup_old_sessions()
@@ -566,7 +590,381 @@ async def download_split_result(session_id: str, mode: str, background_tasks: Ba
     background_tasks.add_task(remove_session)
     return FileResponse(file_path, media_type=media, filename=filename)
 
+@app.post("/api/security/upload")
+async def security_upload(file: UploadFile = File(...)):
+    cleanup_old_sessions()
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    os.makedirs(session_dir, mode=0o700, exist_ok=True)
+    
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    with open(pdf_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+        
+    try:
+        doc = fitz.open(pdf_path)
+        is_encrypted = doc.is_encrypted
+        page_count = len(doc)
+        doc.close()
+    except Exception as e:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        
+    file_size = os.path.getsize(pdf_path)
+    
+    return {
+        "session_id": session_id,
+        "filename": file.filename,
+        "is_encrypted": is_encrypted,
+        "page_count": page_count,
+        "file_size": file_size
+    }
+
+@app.post("/api/security/unlock")
+async def security_unlock(req: SecurityUnlockRequest):
+    validate_session_id(req.session_id)
+    session_dir = os.path.join(TEMP_DIR, req.session_id)
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Session expired or file not found.")
+        
+    try:
+        doc = fitz.open(pdf_path)
+        if not doc.is_encrypted:
+            doc.close()
+            raise HTTPException(status_code=400, detail="Document is not password-protected.")
+            
+        auth_status = doc.authenticate(req.password)
+        if auth_status == 0:
+            doc.close()
+            raise HTTPException(status_code=400, detail="Incorrect password. Access denied.")
+            
+        output_path = os.path.join(session_dir, "decrypted.pdf")
+        doc.save(output_path)
+        doc.close()
+    except Exception as e:
+        if 'doc' in locals() and not doc.is_closed:
+            doc.close()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {str(e)}")
+        
+    return {"download_url": f"/api/download/security/{req.session_id}/decrypt"}
+
+@app.post("/api/security/protect")
+async def security_protect(req: SecurityProtectRequest):
+    validate_session_id(req.session_id)
+    session_dir = os.path.join(TEMP_DIR, req.session_id)
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Session expired or file not found.")
+        
+    try:
+        doc = fitz.open(pdf_path)
+        
+        # Base permissions allowing all features
+        permissions = (
+            fitz.PDF_PERM_PRINT | 
+            fitz.PDF_PERM_MODIFY | 
+            fitz.PDF_PERM_COPY | 
+            fitz.PDF_PERM_ANNOTATE | 
+            fitz.PDF_PERM_FORM | 
+            fitz.PDF_PERM_ACCESSIBILITY | 
+            fitz.PDF_PERM_ASSEMBLE | 
+            fitz.PDF_PERM_PRINT_HQ
+        )
+        
+        if req.prevent_print:
+            permissions &= ~fitz.PDF_PERM_PRINT
+            permissions &= ~fitz.PDF_PERM_PRINT_HQ
+        if req.prevent_copy:
+            permissions &= ~fitz.PDF_PERM_COPY
+            permissions &= ~fitz.PDF_PERM_ACCESSIBILITY
+        if req.prevent_modify:
+            permissions &= ~fitz.PDF_PERM_MODIFY
+            permissions &= ~fitz.PDF_PERM_ANNOTATE
+            permissions &= ~fitz.PDF_PERM_FORM
+            permissions &= ~fitz.PDF_PERM_ASSEMBLE
+            
+        output_path = os.path.join(session_dir, "protected.pdf")
+        
+        doc.save(
+            output_path, 
+            encryption=fitz.PDF_ENCRYPT_AES_256, 
+            user_pw=req.user_password, 
+            owner_pw=req.owner_password, 
+            permissions=permissions
+        )
+        doc.close()
+    except Exception as e:
+        if 'doc' in locals() and not doc.is_closed:
+            doc.close()
+        raise HTTPException(status_code=500, detail=f"Failed to protect PDF: {str(e)}")
+        
+    return {"download_url": f"/api/download/security/{req.session_id}/protect"}
+
+@app.get("/api/download/security/{session_id}/{mode}")
+async def download_security_result(session_id: str, mode: str, background_tasks: BackgroundTasks):
+    validate_session_id(session_id)
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    
+    if mode == "decrypt":
+        file_path = os.path.join(session_dir, "decrypted.pdf")
+        filename = "unlocked_document.pdf"
+    elif mode == "protect":
+        file_path = os.path.join(session_dir, "protected.pdf")
+        filename = "protected_document.pdf"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode.")
+        
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Requested security file not found.")
+        
+    def remove_session():
+        time.sleep(2)
+        shutil.rmtree(session_dir, ignore_errors=True)
+        
+    background_tasks.add_task(remove_session)
+    return FileResponse(file_path, media_type="application/pdf", filename=filename)
+
+@app.post("/api/compress/upload")
+async def compress_upload(file: UploadFile = File(...)):
+    cleanup_old_sessions()
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    os.makedirs(session_dir, mode=0o700, exist_ok=True)
+    
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    with open(pdf_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+        
+    try:
+        doc = fitz.open(pdf_path)
+        doc.close()
+    except Exception as e:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        
+    file_size = os.path.getsize(pdf_path)
+    
+    return {
+        "session_id": session_id,
+        "filename": file.filename,
+        "file_size": file_size
+    }
+
+@app.post("/api/compress/execute")
+async def compress_execute(req: CompressRequest):
+    validate_session_id(req.session_id)
+    session_dir = os.path.join(TEMP_DIR, req.session_id)
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Session expired or file not found.")
+        
+    try:
+        from PIL import Image
+        import io
+        
+        doc = fitz.open(pdf_path)
+        
+        if req.level == "low":
+            quality = 85
+            max_size = 1500
+        elif req.level == "medium":
+            quality = 65
+            max_size = 1000
+        elif req.level == "high":
+            quality = 45
+            max_size = 750
+        else:
+            doc.close()
+            raise HTTPException(status_code=400, detail="Invalid compression level.")
+            
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            image_list = page.get_images()
+            for img_info in image_list:
+                xref = img_info[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    if not base_image:
+                        continue
+                    
+                    image_bytes = base_image["image"]
+                    img = Image.open(io.BytesIO(image_bytes))
+                    
+                    if max(img.size) > max_size:
+                        ratio = max_size / max(img.size)
+                        new_size = (int(img.width * ratio), int(img.height * ratio))
+                        resample = getattr(Image, "Resampling", None)
+                        resample_filter = resample.LANCZOS if resample else getattr(Image, "ANTIALIAS", 3)
+                        img = img.resize(new_size, resample=resample_filter)
+                        
+                    if img.mode in ("RGBA", "LA"):
+                        background = Image.new("RGB", img.size, (255, 255, 255))
+                        background.paste(img, mask=img.split()[-1])
+                        img = background
+                    elif img.mode != "RGB":
+                        img = img.convert("RGB")
+                        
+                    compressed_io = io.BytesIO()
+                    img.save(compressed_io, format="JPEG", quality=quality, optimize=True)
+                    compressed_bytes = compressed_io.getvalue()
+                    
+                    page.replace_image(xref, stream=compressed_bytes)
+                except Exception as img_err:
+                    print(f"Skipping image compression for xref {xref}: {img_err}")
+                    
+        output_path = os.path.join(session_dir, "compressed.pdf")
+        doc.save(output_path, garbage=4, deflate=True)
+        doc.close()
+    except Exception as e:
+        if 'doc' in locals() and not doc.is_closed:
+            doc.close()
+        raise HTTPException(status_code=500, detail=f"Compression failed: {str(e)}")
+        
+    original_size = os.path.getsize(pdf_path)
+    compressed_size = os.path.getsize(output_path)
+    
+    return {
+        "download_url": f"/api/download/compress/{req.session_id}",
+        "original_size": original_size,
+        "compressed_size": compressed_size
+    }
+
+@app.get("/api/download/compress/{session_id}")
+async def download_compressed_pdf(session_id: str):
+    validate_session_id(session_id)
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    output_path = os.path.join(session_dir, "compressed.pdf")
+    
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=404, detail="Compressed document not found.")
+        
+    return FileResponse(output_path, media_type="application/pdf", filename="compressed_document.pdf")
+
+@app.post("/api/cleanup/{session_id}")
+async def cleanup_session(session_id: str):
+    validate_session_id(session_id)
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    if os.path.exists(session_dir):
+        shutil.rmtree(session_dir, ignore_errors=True)
+    return {"status": "success"}
+
 # Mount frontend files
+
+@app.post("/api/organize/upload")
+async def organize_upload(file: UploadFile = File(...)):
+    cleanup_old_sessions()
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    os.makedirs(session_dir, mode=0o700, exist_ok=True)
+    
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    with open(pdf_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+        
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        
+    pages = []
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        rect = page.rect
+        
+        try:
+            pix = page.get_pixmap(dpi=100)
+            img_path = os.path.join(session_dir, f"page_{page_num}.png")
+            pix.save(img_path)
+        except Exception as e:
+            print(f"Error rendering organize preview page {page_num}: {e}")
+            
+        pages.append({
+            "page_num": page_num,
+            "width": rect.width,
+            "height": rect.height,
+            "image_url": f"/api/organize/page/{session_id}/{page_num}"
+        })
+        
+    doc.close()
+    return {
+        "session_id": session_id,
+        "filename": file.filename,
+        "total_pages": len(pages),
+        "pages": pages
+    }
+
+@app.get("/api/organize/page/{session_id}/{page_num}")
+async def get_organize_page_image(session_id: str, page_num: int):
+    validate_session_id(session_id)
+    img_path = os.path.join(TEMP_DIR, session_id, f"page_{page_num}.png")
+    if not os.path.exists(img_path):
+        raise HTTPException(status_code=404, detail="Page preview image not found.")
+    return FileResponse(img_path, media_type="image/png")
+
+@app.post("/api/organize/execute")
+async def organize_execute(req: OrganizeRequest):
+    validate_session_id(req.session_id)
+    session_dir = os.path.join(TEMP_DIR, req.session_id)
+    pdf_path = os.path.join(session_dir, "input.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Session expired or file not found.")
+        
+    output_path = os.path.join(session_dir, "organized.pdf")
+    
+    try:
+        src_doc = fitz.open(pdf_path)
+        out_doc = fitz.open()
+        
+        for item in req.pages:
+            # Insert original page into output document
+            out_doc.insert_pdf(src_doc, from_page=item.page_num, to_page=item.page_num)
+            
+            # Retrieve the newly inserted page
+            page = out_doc[-1]
+            
+            # Apply target rotation (set_rotation sets absolute rotation angle: 0, 90, 180, 270)
+            page.set_rotation(item.rotation % 360)
+            
+        out_doc.save(output_path, garbage=3, deflate=True)
+        out_doc.close()
+        src_doc.close()
+    except Exception as e:
+        if 'out_doc' in locals() and not out_doc.is_closed:
+            out_doc.close()
+        if 'src_doc' in locals() and not src_doc.is_closed:
+            src_doc.close()
+        raise HTTPException(status_code=500, detail=f"Page organization failed: {str(e)}")
+        
+    return {"download_url": f"/api/download/organize/{req.session_id}"}
+
+@app.get("/api/download/organize/{session_id}")
+async def download_organized_pdf(session_id: str):
+    validate_session_id(session_id)
+    session_dir = os.path.join(TEMP_DIR, session_id)
+    output_path = os.path.join(session_dir, "organized.pdf")
+    
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=404, detail="Organized document not found.")
+        
+    return FileResponse(output_path, media_type="application/pdf", filename="organized_document.pdf")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")

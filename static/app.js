@@ -27,18 +27,111 @@ let splitSessionData = {
 };
 let splitCutPoints = new Set();
 
+let securitySessionData = {
+    sessionId: null,
+    filename: "",
+    fileSize: 0,
+    totalPages: 0,
+    isEncrypted: false
+};
+
+let compressSessionData = {
+    sessionId: null,
+    filename: "",
+    fileSize: 0,
+    level: "medium"
+};
+
+let organizeSessionData = {
+    sessionId: null,
+    filename: "",
+    totalPages: 0,
+    pages: [] // { page_num, width, height, image_url, rotation, deleted }
+};
+
 
 // DOM Elements
 const dashboardSection = document.getElementById("dashboardSection");
 const toolSanitizeCard = document.getElementById("toolSanitizeCard");
 const toolMergeCard = document.getElementById("toolMergeCard");
 const toolSplitCard = document.getElementById("toolSplitCard");
+const toolSecurityCard = document.getElementById("toolSecurityCard");
+const toolCompressCard = document.getElementById("toolCompressCard");
 
 const headerLogo = document.getElementById("headerLogo");
 
 const sanitizeBackBtn = document.getElementById("sanitizeBackBtn");
 const mergeBackBtn = document.getElementById("mergeBackBtn");
 const splitBackBtn = document.getElementById("splitBackBtn");
+const securityBackBtn = document.getElementById("securityBackBtn");
+const compressBackBtn = document.getElementById("compressBackBtn");
+const organizeBackBtn = document.getElementById("organizeBackBtn");
+
+const compressSection = document.getElementById("compressSection");
+const compressUploadCard = document.getElementById("compressUploadCard");
+const compressFileInput = document.getElementById("compressFileInput");
+const compressDropZone = document.getElementById("compressDropZone");
+const compressWorkspaceContainer = document.getElementById("compressWorkspaceContainer");
+const compressFileNameDisplay = document.getElementById("compressFileNameDisplay");
+const compressFileSizeDisplay = document.getElementById("compressFileSizeDisplay");
+
+// Configuration / Results Panels
+const compressConfigPanel = document.getElementById("compressConfigPanel");
+const compressResultsPanel = document.getElementById("compressResultsPanel");
+const executeCompressBtn = document.getElementById("executeCompressBtn");
+const closeCompressBtn = document.getElementById("closeCompressBtn");
+const downloadCompressedBtn = document.getElementById("downloadCompressedBtn");
+const closeCompressResultsBtn = document.getElementById("closeCompressResultsBtn");
+
+// Results Displays
+const originalSizeResult = document.getElementById("originalSizeResult");
+const compressedSizeResult = document.getElementById("compressedSizeResult");
+const savingPercentResult = document.getElementById("savingPercentResult");
+const savingAbsoluteResult = document.getElementById("savingAbsoluteResult");
+
+const organizeSection = document.getElementById("organizeSection");
+const organizeUploadCard = document.getElementById("organizeUploadCard");
+const organizeFileInput = document.getElementById("organizeFileInput");
+const organizeDropZone = document.getElementById("organizeDropZone");
+const organizeWorkspaceContainer = document.getElementById("organizeWorkspaceContainer");
+const organizeFileNameDisplay = document.getElementById("organizeFileNameDisplay");
+const organizeTotalPagesVal = document.getElementById("organizeTotalPagesVal");
+const organizeDeleteCountVal = document.getElementById("organizeDeleteCountVal");
+const organizeRotateCountVal = document.getElementById("organizeRotateCountVal");
+const executeOrganizeBtn = document.getElementById("executeOrganizeBtn");
+const clearOrganizeBtn = document.getElementById("clearOrganizeBtn");
+const organizeThumbnailGrid = document.getElementById("organizeThumbnailGrid");
+const closeOrganizeWorkspaceBtn = document.getElementById("closeOrganizeWorkspaceBtn");
+const toolOrganizeCard = document.getElementById("toolOrganizeCard");
+
+const securitySection = document.getElementById("securitySection");
+const securityUploadCard = document.getElementById("securityUploadCard");
+const securityFileInput = document.getElementById("securityFileInput");
+const securityDropZone = document.getElementById("securityDropZone");
+const securityWorkspaceContainer = document.getElementById("securityWorkspaceContainer");
+const securityFileNameDisplay = document.getElementById("securityFileNameDisplay");
+const securityPageCountDisplay = document.getElementById("securityPageCountDisplay");
+const securityFileSizeDisplay = document.getElementById("securityFileSizeDisplay");
+
+// Unlock Form Elements
+const securityUnlockOverlay = document.getElementById("securityUnlockOverlay");
+const securityUnlockPasswordInput = document.getElementById("securityUnlockPasswordInput");
+const toggleUnlockPasswordBtn = document.getElementById("toggleUnlockPasswordBtn");
+const executeUnlockBtn = document.getElementById("executeUnlockBtn");
+const closeUnlockBtn = document.getElementById("closeUnlockBtn");
+
+// Protect Form Elements
+const securityProtectOptions = document.getElementById("securityProtectOptions");
+const securityUserPasswordInput = document.getElementById("securityUserPasswordInput");
+const toggleUserPasswordBtn = document.getElementById("toggleUserPasswordBtn");
+const securityOwnerPasswordInput = document.getElementById("securityOwnerPasswordInput");
+const toggleOwnerPasswordBtn = document.getElementById("toggleOwnerPasswordBtn");
+const preventPrintToggle = document.getElementById("preventPrintToggle");
+const preventCopyToggle = document.getElementById("preventCopyToggle");
+const preventModifyToggle = document.getElementById("preventModifyToggle");
+const executeProtectBtn = document.getElementById("executeProtectBtn");
+const closeProtectBtn = document.getElementById("closeProtectBtn");
+
 
 const uploadSection = document.getElementById("uploadSection");
 const workspaceSection = document.getElementById("workspaceSection");
@@ -147,11 +240,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sanitizeBackBtn) sanitizeBackBtn.addEventListener("click", returnToDashboard);
     if (mergeBackBtn) mergeBackBtn.addEventListener("click", returnToDashboard);
     if (splitBackBtn) splitBackBtn.addEventListener("click", returnToDashboard);
+    if (securityBackBtn) securityBackBtn.addEventListener("click", returnToDashboard);
+    if (compressBackBtn) compressBackBtn.addEventListener("click", returnToDashboard);
+    if (organizeBackBtn) organizeBackBtn.addEventListener("click", returnToDashboard);
 
     // Dashboard Cards (optional if present)
     if (toolSanitizeCard) toolSanitizeCard.addEventListener("click", () => switchAppMode("sanitize"));
     if (toolMergeCard) toolMergeCard.addEventListener("click", () => switchAppMode("merge"));
     if (toolSplitCard) toolSplitCard.addEventListener("click", () => switchAppMode("split"));
+    if (toolSecurityCard) toolSecurityCard.addEventListener("click", () => switchAppMode("security"));
+    if (toolCompressCard) toolCompressCard.addEventListener("click", () => switchAppMode("compress"));
+    if (toolOrganizeCard) toolOrganizeCard.addEventListener("click", () => switchAppMode("organize"));
 
     // File Drag & Drop (Sanitize)
     if (dropZone) {
@@ -280,9 +379,141 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sanitizeBtn) sanitizeBtn.addEventListener("click", runSanitization);
     if (closeWorkspaceBtn) closeWorkspaceBtn.addEventListener("click", closeWorkspace);
     
+    // File Drag & Drop (Security)
+    if (securityDropZone) {
+        securityDropZone.addEventListener("click", () => {
+            securityFileInput.click();
+        });
+        securityDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            securityDropZone.classList.add("dragover");
+        });
+        securityDropZone.addEventListener("dragleave", () => {
+            securityDropZone.classList.remove("dragover");
+        });
+        securityDropZone.addEventListener("drop", handleSecurityFileDrop);
+    }
+    if (securityFileInput) {
+        securityFileInput.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+        securityFileInput.addEventListener("change", handleSecurityFileSelect);
+    }
+
+    // Password Visibility Toggles
+    if (toggleUnlockPasswordBtn && securityUnlockPasswordInput) {
+        toggleUnlockPasswordBtn.addEventListener("click", () => {
+            const isPw = securityUnlockPasswordInput.type === "password";
+            securityUnlockPasswordInput.type = isPw ? "text" : "password";
+            toggleUnlockPasswordBtn.querySelector("i").className = isPw ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+        });
+    }
+    if (toggleUserPasswordBtn && securityUserPasswordInput) {
+        toggleUserPasswordBtn.addEventListener("click", () => {
+            const isPw = securityUserPasswordInput.type === "password";
+            securityUserPasswordInput.type = isPw ? "text" : "password";
+            toggleUserPasswordBtn.querySelector("i").className = isPw ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+        });
+    }
+    if (toggleOwnerPasswordBtn && securityOwnerPasswordInput) {
+        toggleOwnerPasswordBtn.addEventListener("click", () => {
+            const isPw = securityOwnerPasswordInput.type === "password";
+            securityOwnerPasswordInput.type = isPw ? "text" : "password";
+            toggleOwnerPasswordBtn.querySelector("i").className = isPw ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+        });
+    }
+
+    // Security Action Handlers
+    if (executeUnlockBtn) executeUnlockBtn.addEventListener("click", runUnlock);
+    if (executeProtectBtn) executeProtectBtn.addEventListener("click", runProtect);
+    if (closeUnlockBtn) closeUnlockBtn.addEventListener("click", closeSecurityWorkspace);
+    if (closeProtectBtn) closeProtectBtn.addEventListener("click", closeSecurityWorkspace);
+
+    // File Drag & Drop (Compress)
+    if (compressDropZone) {
+        compressDropZone.addEventListener("click", () => {
+            compressFileInput.click();
+        });
+        compressDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            compressDropZone.classList.add("dragover");
+        });
+        compressDropZone.addEventListener("dragleave", () => {
+            compressDropZone.classList.remove("dragover");
+        });
+        compressDropZone.addEventListener("drop", handleCompressFileDrop);
+    }
+    if (compressFileInput) {
+        compressFileInput.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+        compressFileInput.addEventListener("change", handleCompressFileSelect);
+    }
+
+    // Segmented Option Pills for Compress
+    const segmentBtns = document.querySelectorAll("#compressSection .segment-btn");
+    segmentBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            segmentBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            compressSessionData.level = btn.dataset.level;
+        });
+    });
+
+    // Compress Action Handlers
+    if (executeCompressBtn) executeCompressBtn.addEventListener("click", runCompress);
+    if (closeCompressBtn) closeCompressBtn.addEventListener("click", closeCompressWorkspace);
+    if (closeCompressResultsBtn) closeCompressResultsBtn.addEventListener("click", closeCompressResults);
+    if (downloadCompressedBtn) {
+        downloadCompressedBtn.addEventListener("click", () => {
+            const url = downloadCompressedBtn.dataset.downloadUrl;
+            if (url) {
+                triggerFileDownload(url, `compressed_${compressSessionData.filename || "document.pdf"}`);
+            }
+        });
+    }
+
+    // File Drag & Drop (Organize)
+    if (organizeDropZone) {
+        organizeDropZone.addEventListener("click", () => {
+            organizeFileInput.click();
+        });
+        organizeDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            organizeDropZone.classList.add("dragover");
+        });
+        organizeDropZone.addEventListener("dragleave", () => {
+            organizeDropZone.classList.remove("dragover");
+        });
+        organizeDropZone.addEventListener("drop", handleOrganizeFileDrop);
+    }
+    if (organizeFileInput) {
+        organizeFileInput.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+        organizeFileInput.addEventListener("change", handleOrganizeFileSelect);
+    }
+
+    // Organize Action Handlers
+    if (executeOrganizeBtn) executeOrganizeBtn.addEventListener("click", runOrganize);
+    if (clearOrganizeBtn) clearOrganizeBtn.addEventListener("click", clearOrganizeState);
+    if (closeOrganizeWorkspaceBtn) closeOrganizeWorkspaceBtn.addEventListener("click", closeOrganizeWorkspace);
+    
     // Monitor scroll inside viewer to update page indicator
     const viewerOuter = document.querySelector(".pdf-viewer-outer");
     if (viewerOuter) viewerOuter.addEventListener("scroll", handleViewerScroll);
+    
+    // Restore session state on load if exists
+    const savedStateStr = sessionStorage.getItem("secure_redact_state");
+    if (savedStateStr) {
+        try {
+            const state = JSON.parse(savedStateStr);
+            restoreAllStates(state);
+        } catch (e) {
+            console.error("Failed to restore session state:", e);
+            sessionStorage.removeItem("secure_redact_state");
+        }
+    }
 });
 
 // Theme Management
@@ -1274,8 +1505,13 @@ function switchAppMode(mode) {
     const splitSec = document.getElementById("splitSection");
     if (mergeSec) mergeSec.classList.add("hidden");
     if (splitSec) splitSec.classList.add("hidden");
+    if (securitySection) securitySection.classList.add("hidden");
+    if (compressSection) compressSection.classList.add("hidden");
+    if (organizeSection) organizeSection.classList.add("hidden");
 
-    if (mode === "sanitize") {
+    if (mode === "dashboard") {
+        if (dashboardSection) dashboardSection.classList.remove("hidden");
+    } else if (mode === "sanitize") {
         if (sessionData.sessionId) {
             if (workspaceSection) workspaceSection.classList.remove("hidden");
         } else {
@@ -1294,6 +1530,36 @@ function switchAppMode(mode) {
             if (splitUploadCard) splitUploadCard.classList.remove("hidden");
             if (splitWorkspaceContainer) splitWorkspaceContainer.classList.add("hidden");
         }
+    } else if (mode === "security") {
+        if (securitySection) securitySection.classList.remove("hidden");
+        if (securitySessionData.sessionId) {
+            if (securityUploadCard) securityUploadCard.classList.add("hidden");
+            if (securityWorkspaceContainer) securityWorkspaceContainer.classList.remove("hidden");
+            renderSecurityWorkspace();
+        } else {
+            if (securityUploadCard) securityUploadCard.classList.remove("hidden");
+            if (securityWorkspaceContainer) securityWorkspaceContainer.classList.add("hidden");
+        }
+    } else if (mode === "compress") {
+        if (compressSection) compressSection.classList.remove("hidden");
+        if (compressSessionData.sessionId) {
+            if (compressUploadCard) compressUploadCard.classList.add("hidden");
+            if (compressWorkspaceContainer) compressWorkspaceContainer.classList.remove("hidden");
+            renderCompressWorkspace();
+        } else {
+            if (compressUploadCard) compressUploadCard.classList.remove("hidden");
+            if (compressWorkspaceContainer) compressWorkspaceContainer.classList.add("hidden");
+        }
+    } else if (mode === "organize") {
+        if (organizeSection) organizeSection.classList.remove("hidden");
+        if (organizeSessionData.sessionId) {
+            if (organizeUploadCard) organizeUploadCard.classList.add("hidden");
+            if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.remove("hidden");
+            renderOrganizeWorkspace();
+        } else {
+            if (organizeUploadCard) organizeUploadCard.classList.remove("hidden");
+            if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.add("hidden");
+        }
     }
 }
 
@@ -1305,8 +1571,11 @@ function returnToDashboard() {
     closeWorkspace(); // Cleans sanitize state
     clearMergeState(); // Cleans merge state
     closeSplitWorkspace(); // Cleans split state
+    closeSecurityWorkspace(); // Cleans security state
+    closeCompressWorkspace(); // Cleans compress state
+    closeOrganizeWorkspace(); // Cleans organize state
     
-    switchAppMode("sanitize");
+    switchAppMode("dashboard");
 }
 
 // Merge PDFs tool handlers
@@ -2031,4 +2300,829 @@ function closeSplitWorkspace() {
     if (splitWorkspaceContainer) splitWorkspaceContainer.classList.add("hidden");
     if (splitUploadCard) splitUploadCard.classList.remove("hidden");
 }
+
+// Protect & Unlock PDF handlers
+function handleSecurityFileSelect(e) {
+    if (securityFileInput.files.length > 0) {
+        uploadSecurityFile(securityFileInput.files[0]);
+    }
+}
+
+function handleSecurityFileDrop(e) {
+    e.preventDefault();
+    securityDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadSecurityFile(e.dataTransfer.files[0]);
+    }
+}
+
+function uploadSecurityFile(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        alert("Only PDF files are supported.");
+        return;
+    }
+    
+    showLoading(true, "Uploading and checking encryption status...", 30);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    fetch("/api/security/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Upload failed"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        securitySessionData = {
+            sessionId: data.session_id,
+            filename: data.filename,
+            fileSize: data.file_size,
+            totalPages: data.page_count,
+            isEncrypted: data.is_encrypted
+        };
+        showLoading(false);
+        switchAppMode("security");
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Upload error: " + error.message);
+        if (securityFileInput) securityFileInput.value = "";
+    });
+}
+
+function renderSecurityWorkspace() {
+    if (securityFileNameDisplay) securityFileNameDisplay.innerText = securitySessionData.filename;
+    
+    let sizeText = "";
+    if (securitySessionData.fileSize > 1024 * 1024) {
+        sizeText = (securitySessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+    } else {
+        sizeText = (securitySessionData.fileSize / 1024).toFixed(1) + " KB";
+    }
+    if (securityFileSizeDisplay) securityFileSizeDisplay.innerText = sizeText;
+    
+    if (securityPageCountDisplay) {
+        securityPageCountDisplay.innerText = securitySessionData.totalPages + (securitySessionData.totalPages === 1 ? " page" : " pages");
+    }
+    
+    if (securitySessionData.isEncrypted) {
+        if (securityUnlockOverlay) securityUnlockOverlay.classList.remove("hidden");
+        if (securityProtectOptions) securityProtectOptions.classList.add("hidden");
+        if (securityUnlockPasswordInput) {
+            securityUnlockPasswordInput.value = "";
+            securityUnlockPasswordInput.type = "password";
+        }
+        if (toggleUnlockPasswordBtn) {
+            toggleUnlockPasswordBtn.querySelector("i").className = "fa-solid fa-eye";
+        }
+    } else {
+        if (securityUnlockOverlay) securityUnlockOverlay.classList.add("hidden");
+        if (securityProtectOptions) securityProtectOptions.classList.remove("hidden");
+        
+        // Clear protect inputs
+        if (securityUserPasswordInput) {
+            securityUserPasswordInput.value = "";
+            securityUserPasswordInput.type = "password";
+        }
+        if (toggleUserPasswordBtn) {
+            toggleUserPasswordBtn.querySelector("i").className = "fa-solid fa-eye";
+        }
+        if (securityOwnerPasswordInput) {
+            securityOwnerPasswordInput.value = "";
+            securityOwnerPasswordInput.type = "password";
+        }
+        if (toggleOwnerPasswordBtn) {
+            toggleOwnerPasswordBtn.querySelector("i").className = "fa-solid fa-eye";
+        }
+        if (preventPrintToggle) preventPrintToggle.checked = false;
+        if (preventCopyToggle) preventCopyToggle.checked = false;
+        if (preventModifyToggle) preventModifyToggle.checked = false;
+    }
+}
+
+function runUnlock() {
+    const password = securityUnlockPasswordInput.value;
+    if (!password) {
+        alert("Please enter the password to unlock the document.");
+        return;
+    }
+    
+    showLoading(true, "Authenticating and unlocking PDF...", 50);
+    
+    fetch("/api/security/unlock", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            session_id: securitySessionData.sessionId,
+            password: password
+        })
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Incorrect password"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        showLoading(false);
+        // Direct download of decrypted PDF
+        triggerFileDownload(data.download_url, `unlocked_${securitySessionData.filename || "document.pdf"}`);
+        
+        // Prompt success and return to dashboard
+        setTimeout(() => {
+            alert("Document unlocked successfully! Decrypted version downloaded.");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Unlock failed: " + error.message);
+    });
+}
+
+function runProtect() {
+    const userPassword = securityUserPasswordInput.value;
+    const ownerPassword = securityOwnerPasswordInput.value;
+    
+    if (!userPassword && !ownerPassword) {
+        alert("Please specify at least a User Password or Owner Password to encrypt the PDF.");
+        return;
+    }
+    
+    if (ownerPassword && ownerPassword === userPassword) {
+        alert("User Password and Owner Password should be different for proper security delegation.");
+        return;
+    }
+    
+    showLoading(true, "Securing document layers...", 60);
+    
+    fetch("/api/security/protect", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            session_id: securitySessionData.sessionId,
+            user_password: userPassword,
+            owner_password: ownerPassword,
+            prevent_print: preventPrintToggle.checked,
+            prevent_copy: preventCopyToggle.checked,
+            prevent_modify: preventModifyToggle.checked
+        })
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Protection failed"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        showLoading(false);
+        // Direct download of protected PDF
+        triggerFileDownload(data.download_url, `protected_${securitySessionData.filename || "document.pdf"}`);
+        
+        setTimeout(() => {
+            alert("Document secured successfully! Encrypted version downloaded.");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Protection failed: " + error.message);
+    });
+}
+
+function closeSecurityWorkspace() {
+    securitySessionData = {
+        sessionId: null,
+        filename: "",
+        fileSize: 0,
+        totalPages: 0,
+        isEncrypted: false
+    };
+    
+    if (securityFileInput) securityFileInput.value = "";
+    if (securityUnlockPasswordInput) securityUnlockPasswordInput.value = "";
+    if (securityUserPasswordInput) securityUserPasswordInput.value = "";
+    if (securityOwnerPasswordInput) securityOwnerPasswordInput.value = "";
+    
+    if (securityWorkspaceContainer) securityWorkspaceContainer.classList.add("hidden");
+    if (securityUploadCard) securityUploadCard.classList.remove("hidden");
+}
+
+function saveAllStates() {
+    let activeMode = "dashboard";
+    if (securitySection && !securitySection.classList.contains("hidden")) activeMode = "security";
+    else if (workspaceSection && !workspaceSection.classList.contains("hidden")) activeMode = "sanitize";
+    else if (uploadSection && !uploadSection.classList.contains("hidden")) activeMode = "sanitize";
+    else if (document.getElementById("mergeSection") && !document.getElementById("mergeSection").classList.contains("hidden")) activeMode = "merge";
+    else if (document.getElementById("splitSection") && !document.getElementById("splitSection").classList.contains("hidden")) activeMode = "split";
+    else if (compressSection && !compressSection.classList.contains("hidden")) activeMode = "compress";
+    else if (organizeSection && !organizeSection.classList.contains("hidden")) activeMode = "organize";
+
+    const state = {
+        activeMode: activeMode,
+        sessionData: sessionData,
+        redactedFindingIds: Array.from(redactedFindingIds),
+        manualRedactions: manualRedactions,
+        mergeSessionData: mergeSessionData,
+        splitSessionData: {
+            ...splitSessionData,
+            selectedPages: Array.from(splitSessionData.selectedPages)
+        },
+        splitCutPoints: Array.from(splitCutPoints),
+        securitySessionData: securitySessionData,
+        compressSessionData: compressSessionData,
+        organizeSessionData: organizeSessionData
+    };
+    sessionStorage.setItem("secure_redact_state", JSON.stringify(state));
+}
+
+function restoreAllStates(state) {
+    if (!state) return;
+    
+    // Restore Sanitize
+    if (state.sessionData && state.sessionData.sessionId) {
+        sessionData = state.sessionData;
+        redactedFindingIds = new Set(state.redactedFindingIds || []);
+        manualRedactions = state.manualRedactions || [];
+        
+        fileNameDisplay.innerText = sessionData.filename;
+        if (propFileName) propFileName.innerText = sessionData.filename;
+        if (propPageCount) propPageCount.innerText = sessionData.totalPages;
+        if (totalPagesNum) totalPagesNum.innerText = sessionData.totalPages;
+        if (currentPageNum) currentPageNum.innerText = "1";
+        if (zoomDisplay) zoomDisplay.innerText = "100%";
+        zoomLevel = 1.0;
+        
+        renderFindingsList();
+        renderPDF();
+        renderThumbnails();
+        updateRedactionCount();
+        
+        if (workspaceSection) workspaceSection.classList.remove("hidden");
+        if (uploadSection) uploadSection.classList.add("hidden");
+    }
+    
+    // Restore Merge
+    if (state.mergeSessionData && state.mergeSessionData.sessionId) {
+        mergeSessionData = state.mergeSessionData;
+    }
+    
+    // Restore Split
+    if (state.splitSessionData && state.splitSessionData.sessionId) {
+        splitSessionData = {
+            ...state.splitSessionData,
+            selectedPages: new Set(state.splitSessionData.selectedPages || [])
+        };
+        splitCutPoints = new Set(state.splitCutPoints || []);
+    }
+    
+    // Restore Security
+    if (state.securitySessionData && state.securitySessionData.sessionId) {
+        securitySessionData = state.securitySessionData;
+    }
+    
+    // Restore Compress
+    if (state.compressSessionData && state.compressSessionData.sessionId) {
+        compressSessionData = state.compressSessionData;
+    }
+    
+    // Restore Organize
+    if (state.organizeSessionData && state.organizeSessionData.sessionId) {
+        organizeSessionData = state.organizeSessionData;
+    }
+    
+    if (state.activeMode && state.activeMode !== "dashboard") {
+        switchAppMode(state.activeMode);
+    }
+}
+
+window.addEventListener("beforeunload", (e) => {
+    const isSessionActive = sessionData.sessionId || 
+                            (mergeSessionData.files && mergeSessionData.files.length > 0) || 
+                            splitSessionData.sessionId || 
+                            securitySessionData.sessionId ||
+                            compressSessionData.sessionId ||
+                            organizeSessionData.sessionId;
+                            
+    if (isSessionActive) {
+        saveAllStates();
+        e.preventDefault();
+        e.returnValue = "";
+    } else {
+        sessionStorage.removeItem("secure_redact_state");
+    }
+});
+
+// Helper functions for secure downloads and server cleanup
+function triggerFileDownload(url, filename) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function cleanupSessionOnServer(sessionId) {
+    if (!sessionId) return;
+    fetch(`/api/cleanup/${sessionId}`, { method: "POST", keepalive: true })
+    .catch(err => console.error("Session cleanup failed:", err));
+}
+
+// Compress PDF Tool Handlers
+function handleCompressFileSelect(e) {
+    if (compressFileInput.files.length > 0) {
+        uploadCompressFile(compressFileInput.files[0]);
+    }
+}
+
+function handleCompressFileDrop(e) {
+    e.preventDefault();
+    compressDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadCompressFile(e.dataTransfer.files[0]);
+    }
+}
+
+function uploadCompressFile(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        alert("Please upload a PDF file.");
+        return;
+    }
+    
+    showLoading(true, "Uploading PDF...", 30);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    fetch("/api/compress/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Upload failed"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        compressSessionData = {
+            sessionId: data.session_id,
+            filename: data.filename,
+            fileSize: data.file_size,
+            level: "medium" // reset level to default on new upload
+        };
+        
+        // Update level pills visually to match default level
+        const segmentBtns = document.querySelectorAll("#compressSection .segment-btn");
+        segmentBtns.forEach(btn => {
+            if (btn.dataset.level === "medium") {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+        
+        showLoading(false);
+        switchAppMode("compress");
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Upload error: " + error.message);
+        if (compressFileInput) compressFileInput.value = "";
+    });
+}
+
+function renderCompressWorkspace() {
+    if (compressFileNameDisplay) compressFileNameDisplay.innerText = compressSessionData.filename;
+    
+    let sizeText = "";
+    if (compressSessionData.fileSize > 1024 * 1024) {
+        sizeText = (compressSessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+    } else {
+        sizeText = (compressSessionData.fileSize / 1024).toFixed(1) + " KB";
+    }
+    if (compressFileSizeDisplay) compressFileSizeDisplay.innerText = sizeText;
+    
+    // Ensure correct configuration panel visibility
+    if (compressConfigPanel) compressConfigPanel.classList.remove("hidden");
+    if (compressResultsPanel) compressResultsPanel.classList.add("hidden");
+    
+    // Ensure segment buttons reflect correct state (e.g. from restored state)
+    const segmentBtns = document.querySelectorAll("#compressSection .segment-btn");
+    segmentBtns.forEach(btn => {
+        if (btn.dataset.level === compressSessionData.level) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    });
+}
+
+function runCompress() {
+    if (!compressSessionData.sessionId) return;
+    
+    showLoading(true, "Compressing document...", 40);
+    
+    fetch("/api/compress/execute", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            session_id: compressSessionData.sessionId,
+            level: compressSessionData.level
+        })
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Compression failed"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        showLoading(false);
+        
+        // Show comparison stats in Results Panel
+        if (compressConfigPanel) compressConfigPanel.classList.add("hidden");
+        if (compressResultsPanel) compressResultsPanel.classList.remove("hidden");
+        
+        // Format original size
+        let origSizeText = "";
+        if (data.original_size > 1024 * 1024) {
+            origSizeText = (data.original_size / (1024 * 1024)).toFixed(2) + " MB";
+        } else {
+            origSizeText = (data.original_size / 1024).toFixed(1) + " KB";
+        }
+        
+        // Format compressed size
+        let compSizeText = "";
+        if (data.compressed_size > 1024 * 1024) {
+            compSizeText = (data.compressed_size / (1024 * 1024)).toFixed(2) + " MB";
+        } else {
+            compSizeText = (data.compressed_size / 1024).toFixed(1) + " KB";
+        }
+        
+        // Calculation
+        const savedBytes = data.original_size - data.compressed_size;
+        const savedPercent = data.original_size > 0 ? Math.round((savedBytes / data.original_size) * 100) : 0;
+        
+        let savedAbsText = "";
+        if (savedBytes > 1024 * 1024) {
+            savedAbsText = (savedBytes / (1024 * 1024)).toFixed(2) + " MB";
+        } else {
+            savedAbsText = (savedBytes / 1024).toFixed(1) + " KB";
+        }
+        
+        if (originalSizeResult) originalSizeResult.innerText = origSizeText;
+        if (compressedSizeResult) compressedSizeResult.innerText = compSizeText;
+        if (savingPercentResult) savingPercentResult.innerText = savedPercent + "%";
+        if (savingAbsoluteResult) savingAbsoluteResult.innerText = savedAbsText;
+        
+        // Store download url for the download button handler
+        downloadCompressedBtn.dataset.downloadUrl = data.download_url;
+        
+        // Show/hide zero-savings notice
+        const noSavingsNotice = document.getElementById("compressNoSavingsNotice");
+        if (noSavingsNotice) {
+            if (savedPercent <= 0) {
+                noSavingsNotice.classList.remove("hidden");
+            } else {
+                noSavingsNotice.classList.add("hidden");
+            }
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Compression failed: " + error.message);
+    });
+}
+
+function closeCompressWorkspace() {
+    if (compressSessionData.sessionId) {
+        cleanupSessionOnServer(compressSessionData.sessionId);
+    }
+
+    compressSessionData = {
+        sessionId: null,
+        filename: "",
+        fileSize: 0,
+        level: "medium"
+    };
+    
+    if (compressFileInput) compressFileInput.value = "";
+    
+    if (compressWorkspaceContainer) compressWorkspaceContainer.classList.add("hidden");
+    if (compressUploadCard) compressUploadCard.classList.remove("hidden");
+    
+    const noSavingsNotice = document.getElementById("compressNoSavingsNotice");
+    if (noSavingsNotice) noSavingsNotice.classList.add("hidden");
+}
+
+function closeCompressResults() {
+    closeCompressWorkspace();
+}
+
+// Organize PDF Tool Handlers
+function handleOrganizeFileSelect(e) {
+    if (organizeFileInput.files.length > 0) {
+        uploadOrganizeFile(organizeFileInput.files[0]);
+    }
+}
+
+function handleOrganizeFileDrop(e) {
+    e.preventDefault();
+    organizeDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadOrganizeFile(e.dataTransfer.files[0]);
+    }
+}
+
+function uploadOrganizeFile(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        alert("Please upload a PDF file.");
+        return;
+    }
+    
+    showLoading(true, "Uploading and analyzing PDF...", 20);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    fetch("/api/organize/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => { throw new Error(err.detail || "Upload failed"); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        showLoading(false);
+        initializeOrganizeWorkspace(data);
+    })
+    .catch(err => {
+        showLoading(false);
+        alert(err.message);
+        if (organizeFileInput) organizeFileInput.value = "";
+    });
+}
+
+function initializeOrganizeWorkspace(data) {
+    organizeSessionData = {
+        sessionId: data.session_id,
+        filename: data.filename,
+        totalPages: data.total_pages,
+        pages: data.pages.map(p => ({
+            ...p,
+            rotation: 0,
+            deleted: false
+        }))
+    };
+    
+    if (organizeFileNameDisplay) organizeFileNameDisplay.innerText = organizeSessionData.filename;
+    
+    renderOrganizeWorkspace();
+    
+    if (organizeUploadCard) organizeUploadCard.classList.add("hidden");
+    if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.remove("hidden");
+}
+
+function renderOrganizeWorkspace() {
+    if (!organizeThumbnailGrid) return;
+    organizeThumbnailGrid.innerHTML = "";
+    
+    organizeSessionData.pages.forEach(page => {
+        const card = document.createElement("div");
+        card.className = "organize-page-card";
+        card.dataset.pageNum = page.page_num;
+        
+        if (page.deleted) {
+            card.classList.add("deleted");
+        }
+        
+        card.innerHTML = `
+            <div class="organize-page-img-container">
+                <img src="${page.image_url}" class="organize-page-img" alt="Page ${page.page_num + 1}" style="transform: rotate(${page.rotation || 0}deg);">
+                <div class="organize-page-controls">
+                    <button class="organize-control-btn rotate-ccw" title="Rotate Counter-Clockwise">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button class="organize-control-btn rotate-cw" title="Rotate Clockwise">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button class="organize-control-btn delete-page" title="Delete Page">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <span class="organize-page-number">Page ${page.page_num + 1}</span>
+        `;
+        
+        // Add event listeners inside the controls
+        card.querySelector(".rotate-ccw").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleOrganizePageRotation(page.page_num, "ccw");
+        });
+        
+        card.querySelector(".rotate-cw").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleOrganizePageRotation(page.page_num, "cw");
+        });
+        
+        card.querySelector(".delete-page").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleOrganizePageDeletion(page.page_num, true);
+        });
+        
+        if (page.deleted) {
+            const overlay = document.createElement("div");
+            overlay.className = "organize-page-deleted-overlay";
+            overlay.innerHTML = `
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Page Deleted</span>
+                <button class="restore-page-btn">Restore Page</button>
+            `;
+            overlay.querySelector(".restore-page-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleOrganizePageDeletion(page.page_num, false);
+            });
+            card.appendChild(overlay);
+        }
+        
+        organizeThumbnailGrid.appendChild(card);
+    });
+    
+    updateOrganizeSummary();
+}
+
+function toggleOrganizePageRotation(pageNum, direction) {
+    const page = organizeSessionData.pages.find(p => p.page_num === pageNum);
+    if (!page) return;
+    
+    if (direction === "cw") {
+        page.rotation = (page.rotation + 90) % 360;
+    } else {
+        page.rotation = (page.rotation - 90) % 360;
+        if (page.rotation < 0) page.rotation += 360;
+    }
+    
+    const card = document.querySelector(`.organize-page-card[data-page-num="${pageNum}"]`);
+    if (card) {
+        const img = card.querySelector(".organize-page-img");
+        if (img) {
+            img.style.transform = `rotate(${page.rotation}deg)`;
+        }
+    }
+    
+    updateOrganizeSummary();
+    saveAllStates();
+}
+
+function toggleOrganizePageDeletion(pageNum, isDeleted) {
+    const page = organizeSessionData.pages.find(p => p.page_num === pageNum);
+    if (!page) return;
+    
+    page.deleted = isDeleted;
+    
+    const card = document.querySelector(`.organize-page-card[data-page-num="${pageNum}"]`);
+    if (card) {
+        if (isDeleted) {
+            card.classList.add("deleted");
+            let overlay = card.querySelector(".organize-page-deleted-overlay");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.className = "organize-page-deleted-overlay";
+                overlay.innerHTML = `
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Page Deleted</span>
+                    <button class="restore-page-btn">Restore Page</button>
+                `;
+                overlay.querySelector(".restore-page-btn").addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    toggleOrganizePageDeletion(pageNum, false);
+                });
+                card.appendChild(overlay);
+            }
+        } else {
+            card.classList.remove("deleted");
+            const overlay = card.querySelector(".organize-page-deleted-overlay");
+            if (overlay) overlay.remove();
+        }
+    }
+    
+    updateOrganizeSummary();
+    saveAllStates();
+}
+
+function updateOrganizeSummary() {
+    if (!organizeSessionData.sessionId) return;
+    
+    const total = organizeSessionData.totalPages;
+    const deletedCount = organizeSessionData.pages.filter(p => p.deleted).length;
+    const rotatedCount = organizeSessionData.pages.filter(p => !p.deleted && p.rotation !== 0).length;
+    
+    if (organizeTotalPagesVal) organizeTotalPagesVal.innerText = total;
+    if (organizeDeleteCountVal) organizeDeleteCountVal.innerText = `${deletedCount} deleted`;
+    if (organizeRotateCountVal) organizeRotateCountVal.innerText = `${rotatedCount} rotated`;
+    
+    // Enable/disable Apply button based on remaining pages
+    if (executeOrganizeBtn) {
+        const remainingCount = total - deletedCount;
+        executeOrganizeBtn.disabled = (remainingCount <= 0);
+    }
+}
+
+function runOrganize() {
+    if (!organizeSessionData.sessionId) return;
+    
+    const remainingPages = organizeSessionData.pages.filter(p => !p.deleted);
+    if (remainingPages.length === 0) {
+        alert("Cannot organize a document with all pages deleted.");
+        return;
+    }
+    
+    showLoading(true, "Applying changes and compiling PDF...", 40);
+    
+    const payload = {
+        session_id: organizeSessionData.sessionId,
+        pages: remainingPages.map(p => ({
+            page_num: p.page_num,
+            rotation: p.rotation
+        }))
+    };
+    
+    fetch("/api/organize/execute", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(err => { throw new Error(err.detail || "Organization failed"); });
+        }
+        return resp.json();
+    })
+    .then(data => {
+        showLoading(false);
+        triggerFileDownload(data.download_url, `organized_${organizeSessionData.filename || "document.pdf"}`);
+        
+        setTimeout(() => {
+            alert("Changes applied successfully! Your organized PDF has been downloaded.");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Organization failed: " + error.message);
+    });
+}
+
+function clearOrganizeState() {
+    if (!organizeSessionData.sessionId) return;
+    
+    if (confirm("Are you sure you want to reset all rotations and deletions?")) {
+        organizeSessionData.pages.forEach(p => {
+            p.rotation = 0;
+            p.deleted = false;
+        });
+        renderOrganizeWorkspace();
+        saveAllStates();
+    }
+}
+
+function closeOrganizeWorkspace() {
+    if (organizeSessionData.sessionId) {
+        cleanupSessionOnServer(organizeSessionData.sessionId);
+    }
+    
+    organizeSessionData = {
+        sessionId: null,
+        filename: "",
+        totalPages: 0,
+        pages: []
+    };
+    
+    if (organizeFileInput) organizeFileInput.value = "";
+    if (organizeThumbnailGrid) organizeThumbnailGrid.innerHTML = "";
+    
+    if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.add("hidden");
+    if (organizeUploadCard) organizeUploadCard.classList.remove("hidden");
+    
+    saveAllStates();
+}
+
 

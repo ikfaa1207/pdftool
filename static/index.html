@@ -82,6 +82,39 @@
                         <p>visually extract selected pages or split a PDF document into multiple separate parts using page ranges.</p>
                         <button class="btn-primary card-btn">Launch Split</button>
                     </div>
+
+                    <!-- Tool Card: Protect & Unlock -->
+                    <div class="dashboard-card" id="toolSecurityCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-lock-open"></i>
+                        </div>
+                        <h3>Protect & Unlock</h3>
+                        <p>Secure documents with passwords/permissions (AES-256) or unlock protected files with a credentials bypass.</p>
+                        <button class="btn-primary card-btn">Launch Protect & Unlock</button>
+                    </div>
+
+                    <!-- Tool Card: Compress PDF -->
+                    <div class="dashboard-card" id="toolCompressCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-file-zipper"></i>
+                        </div>
+                        <h3>Compress PDF</h3>
+                        <p>Reduce document file sizes with advanced downscaling and re-compression of graphics layers.</p>
+                        <button class="btn-primary card-btn">Launch Compress</button>
+                    </div>
+
+                    <!-- Tool Card: Organize PDF -->
+                    <div class="dashboard-card" id="toolOrganizeCard">
+                        <div class="card-glow"></div>
+                        <div class="card-icon-container">
+                            <i class="fa-solid fa-arrows-spin"></i>
+                        </div>
+                        <h3>Rotate & Delete</h3>
+                        <p>Correct document orientation or remove unnecessary, blank, or layout-broken pages visually.</p>
+                        <button class="btn-primary card-btn">Launch Rotate & Delete</button>
+                    </div>
                 </div>
             </section>
             
@@ -459,6 +492,350 @@
                         <div class="split-grid-viewport">
                             <div id="splitThumbnailGrid" class="split-thumbnail-grid">
                                 <!-- Page cards with gutters dynamically rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Protect & Unlock PDF Workspace (Initially Hidden) -->
+            <section id="securitySection" class="security-section hidden">
+                <!-- Security Upload Card -->
+                <div id="securityUploadCard" class="security-upload-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <h3>Secure or Decrypt PDF</h3>
+                    <p class="upload-subtitle">Drag and drop a PDF file here. We will auto-detect whether it is password-locked.</p>
+                    
+                    <div id="securityDropZone" class="drop-zone">
+                        <input type="file" id="securityFileInput" accept=".pdf" class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop your PDF here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Supports documents up to 50MB</p>
+                    </div>
+                    
+                    <button id="securityBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+
+                <!-- Security Workspace Area (Initially Hidden) -->
+                <div id="securityWorkspaceContainer" class="security-workspace-container hidden">
+                    <div class="security-workspace-card">
+                        
+                        <!-- File Details Card Header -->
+                        <div class="security-file-details">
+                            <div class="file-details-icon">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </div>
+                            <div class="file-details-info">
+                                <h4 id="securityFileNameDisplay">document.pdf</h4>
+                                <p><span id="securityPageCountDisplay">0 pages</span> &bull; <span id="securityFileSizeDisplay">0 KB</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Unlock Mode Overlay / Form (Shown if file is encrypted) -->
+                        <div id="securityUnlockOverlay" class="security-unlock-overlay hidden">
+                            <div class="unlock-icon">
+                                <i class="fa-solid fa-key"></i>
+                            </div>
+                            <h4>Password Protected</h4>
+                            <p>This file requires a password to open. Enter the password below to decrypt and unlock it.</p>
+                            
+                            <div class="password-input-group">
+                                <input type="password" id="securityUnlockPasswordInput" placeholder="Enter password..." class="text-input">
+                                <button id="toggleUnlockPasswordBtn" class="password-toggle" title="Show/Hide Password">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="security-action-buttons">
+                                <button id="executeUnlockBtn" class="btn-primary btn-large">
+                                    <i class="fa-solid fa-lock-open"></i> Unlock & Download
+                                </button>
+                                <button id="closeUnlockBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-xmark"></i> Close Document
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Protect Mode Form (Shown if file is NOT encrypted) -->
+                        <div id="securityProtectOptions" class="security-protect-options hidden">
+                            <h4>Protect Configuration</h4>
+                            <p>Define a user password to restrict opening, and/or owner password to control usage rights.</p>
+                            
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="securityUserPasswordInput">User Password (to Open)</label>
+                                    <div class="password-input-group">
+                                        <input type="password" id="securityUserPasswordInput" placeholder="Password required to open (optional)..." class="text-input">
+                                        <button id="toggleUserPasswordBtn" class="password-toggle" title="Show/Hide Password">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="securityOwnerPasswordInput">Owner Password (to Change Settings)</label>
+                                    <div class="password-input-group">
+                                        <input type="password" id="securityOwnerPasswordInput" placeholder="Password required to edit settings (optional)..." class="text-input">
+                                        <button id="toggleOwnerPasswordBtn" class="password-toggle" title="Show/Hide Password">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="permission-settings-header">
+                                <h5>Restrict Permissions</h5>
+                                <p>Toggles below apply when the document is opened by users. To restrict modifications, an Owner Password must be set above.</p>
+                            </div>
+
+                            <div class="permission-toggles-grid">
+                                <div class="permission-toggle-item">
+                                    <div class="toggle-info">
+                                        <h6>Prevent Printing</h6>
+                                        <p>Restrict the user from printing the document.</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="preventPrintToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                
+                                <div class="permission-toggle-item">
+                                    <div class="toggle-info">
+                                        <h6>Prevent Text/Image Copying</h6>
+                                        <p>Restrict copying of text or extracting of images.</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="preventCopyToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+
+                                <div class="permission-toggle-item">
+                                    <div class="toggle-info">
+                                        <h6>Prevent Content Modifications</h6>
+                                        <p>Restrict merging, page rotation, form fills, and annotations.</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="preventModifyToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="security-action-buttons" style="margin-top: 32px;">
+                                <button id="executeProtectBtn" class="btn-primary btn-large">
+                                    <i class="fa-solid fa-shield-halved"></i> Protect & Download
+                                </button>
+                                <button id="closeProtectBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-xmark"></i> Close Document
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- Compress PDF Workspace (Initially Hidden) -->
+            <section id="compressSection" class="compress-section hidden">
+                <!-- Compress Upload Card -->
+                <div id="compressUploadCard" class="compress-upload-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-file-zipper"></i>
+                    </div>
+                    <h3>Compress PDF Document</h3>
+                    <p class="upload-subtitle">Upload a PDF to reduce its file size by downscaling images and deflating layers.</p>
+                    
+                    <div id="compressDropZone" class="drop-zone">
+                        <input type="file" id="compressFileInput" accept=".pdf" class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop your PDF here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Supports documents up to 50MB</p>
+                    </div>
+                    
+                    <button id="compressBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+
+                <!-- Compress Workspace Area (Initially Hidden) -->
+                <div id="compressWorkspaceContainer" class="compress-workspace-container hidden">
+                    <div class="compress-workspace-card">
+                        
+                        <!-- File Details Card Header -->
+                        <div class="compress-file-details">
+                            <div class="file-details-icon">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </div>
+                            <div class="file-details-info">
+                                <h4 id="compressFileNameDisplay">document.pdf</h4>
+                                <p>Original Size: <span id="compressFileSizeDisplay">0 KB</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Configuration Panel -->
+                        <div id="compressConfigPanel" class="compress-config-panel">
+                            <h4>Select Compression Level</h4>
+                            <p>Choose the level of compression. High compression reduces image resolutions for smallest file size.</p>
+                            
+                            <!-- Segmented Option Pills -->
+                            <div class="segmented-control">
+                                <button class="segment-btn active" data-level="medium">
+                                    <span class="segment-title">Medium</span>
+                                    <span class="segment-desc">Balanced Quality & Size (150 DPI)</span>
+                                </button>
+                                <button class="segment-btn" data-level="low">
+                                    <span class="segment-title">Low</span>
+                                    <span class="segment-desc">High Quality (200 DPI)</span>
+                                </button>
+                                <button class="segment-btn" data-level="high">
+                                    <span class="segment-title">High</span>
+                                    <span class="segment-desc">Max Compression (100 DPI)</span>
+                                </button>
+                            </div>
+
+                            <div class="security-action-buttons" style="margin-top: 32px;">
+                                <button id="executeCompressBtn" class="btn-primary btn-large">
+                                    <i class="fa-solid fa-file-zipper"></i> Compress PDF
+                                </button>
+                                <button id="closeCompressBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-xmark"></i> Close Document
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Results Panel (Initially Hidden) -->
+                        <div id="compressResultsPanel" class="compress-results-panel hidden">
+                            <div class="success-icon-container">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                            <h4>Compression Complete!</h4>
+                            
+                            <!-- Comparison Grid -->
+                            <div class="comparison-grid">
+                                <div class="comp-card">
+                                    <span class="comp-label">Original Size</span>
+                                    <span id="originalSizeResult" class="comp-val">0 KB</span>
+                                </div>
+                                <div class="comp-arrow">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                                <div class="comp-card highlight">
+                                    <span class="comp-label">Compressed Size</span>
+                                    <span id="compressedSizeResult" class="comp-val">0 KB</span>
+                                </div>
+                            </div>
+
+                            <div class="saving-badge-container">
+                                <div class="saving-badge">
+                                    <i class="fa-solid fa-percent"></i>
+                                    <span>Saved <strong id="savingPercentResult">0%</strong> (<span id="savingAbsoluteResult">0 KB</span>)</span>
+                                </div>
+                            </div>
+
+                            <p id="compressNoSavingsNotice" class="hidden" style="margin-top: 16px; font-size: var(--font-size-xs); color: var(--text-muted); text-align: center; max-width: 400px; margin-inline: auto; line-height: 1.4;">
+                                <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i> This document contains mostly text/fonts or is already highly optimized.
+                            </p>
+
+                            <div class="security-action-buttons" style="margin-top: 32px;">
+                                <button id="downloadCompressedBtn" class="btn-primary btn-large">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> Download Compressed PDF
+                                </button>
+                                <button id="closeCompressResultsBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-rotate-left"></i> Compress Another File
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rotate & Delete Pages Workspace (Initially Hidden) -->
+            <section id="organizeSection" class="organize-section hidden">
+                <!-- Organize Upload Card -->
+                <div id="organizeUploadCard" class="organize-upload-card">
+                    <div class="upload-glow"></div>
+                    <div class="upload-icon-container">
+                        <i class="fa-solid fa-arrows-spin"></i>
+                    </div>
+                    <h2>Rotate & Delete Pages</h2>
+                    <p class="upload-subtitle">Upload a PDF to rotate misaligned pages or remove unnecessary/blank pages visually.</p>
+                    
+                    <div id="organizeDropZone" class="drop-zone">
+                        <input type="file" id="organizeFileInput" accept=".pdf" class="file-input">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <p class="drop-text">Drag & drop your PDF here, or <span class="browse-link">browse files</span></p>
+                        <p class="file-limits">Supports documents up to 50MB</p>
+                    </div>
+                    
+                    <button id="organizeBackBtn" class="btn-secondary btn-large" style="margin-top: 24px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+
+                <!-- Organize Workspace Phase (Initially Hidden) -->
+                <div id="organizeWorkspaceContainer" class="organize-workspace-container hidden">
+                    <!-- Organize Toolbar -->
+                    <div class="organize-toolbar">
+                        <div class="organize-toolbar-left">
+                            <span class="organize-doc-title"><i class="fa-solid fa-arrows-spin"></i> Organizing: <span id="organizeFileNameDisplay">document.pdf</span></span>
+                        </div>
+                        <div class="organize-toolbar-right">
+                            <button id="closeOrganizeWorkspaceBtn" class="toolbar-btn" title="Close Workspace">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Workspace -->
+                    <div class="organize-workspace-inner">
+                        <!-- Sidebar Guide / controls -->
+                        <div class="organize-control-sidebar">
+                            <div class="organize-guide-card">
+                                <h4><i class="fa-solid fa-circle-info"></i> How to Organize</h4>
+                                <p>Hover over any page thumbnail to expose controls. Use the rotation buttons to fix misaligned scans, or the delete button to mark blank pages for removal.</p>
+                            </div>
+                            
+                            <div class="organize-selection-summary">
+                                <h4>Selection Summary</h4>
+                                <div class="properties-list">
+                                    <div class="prop-row">
+                                        <span class="prop-label">Total Pages:</span>
+                                        <span id="organizeTotalPagesVal" class="prop-val">0</span>
+                                    </div>
+                                    <div class="prop-row">
+                                        <span class="prop-label">Deleted Count:</span>
+                                        <span id="organizeDeleteCountVal" class="prop-val">0 deleted</span>
+                                    </div>
+                                    <div class="prop-row">
+                                        <span class="prop-label">Rotated Count:</span>
+                                        <span id="organizeRotateCountVal" class="prop-val">0 rotated</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="organize-action-buttons">
+                                <button id="executeOrganizeBtn" class="btn-primary btn-large">
+                                    <span class="btn-text"><i class="fa-solid fa-circle-check"></i> Apply & Download</span>
+                                    <span class="btn-loader hidden"><i class="fa-solid fa-spinner fa-spin"></i> Processing...</span>
+                                </button>
+                                <button id="clearOrganizeBtn" class="btn-secondary btn-large">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset Changes
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Thumbnail Grid Area -->
+                        <div class="organize-grid-viewport">
+                            <div id="organizeThumbnailGrid" class="organize-thumbnail-grid">
+                                <!-- Page cards dynamically rendered here -->
                             </div>
                         </div>
                     </div>
