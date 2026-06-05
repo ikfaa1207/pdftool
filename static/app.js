@@ -1,223 +1,237 @@
-// State Management
-let sessionData = {
-    sessionId: null,
-    filename: "",
-    totalPages: 0,
-    pages: [], // { page_num, width, height, image_url }
-    findings: [] // { id, page_num, category, text, rects: [{x0,y0,x1,y1}] }
-};
+import { State, saveAllStates, restoreAllStates } from './state.js';
+import { 
+    renderPDF, reRenderAllOverlays, renderPageOverlays, setupDrawingEvents, 
+    removeManualRedaction, adjustZoom, applyZoom, fitToWidth, fitToPage, 
+    scrollToPage, scrollToPrevPage, scrollToNextPage, getCurrentVisiblePage, 
+    handleViewerScroll, renderThumbnails, updateActiveThumbnail, toggleThumbnailSidebar 
+} from './canvas.js';
 
-let redactedFindingIds = new Set();
-let manualRedactions = []; // { id, page_num, x0, y0, x1, y1 }
-let zoomLevel = 1.0;
-let isRegexSearch = false;
+import { 
+    apiUploadPDF, apiSearchPDF, apiRedactPDF, apiCleanupSession, 
+    apiMergeUpload, apiMergeExecute, apiSplitUpload, apiSplitExtract, 
+    apiSplitParts, apiSecurityUpload, apiSecurityUnlock, apiSecurityProtect, 
+    apiCompressUpload, apiCompressExecute, apiOrganizeUpload, apiOrganizeExecute, 
+    apiWatermarkUpload, apiWatermarkUploadLogo, apiWatermarkExecute, 
+    apiConvertUploadPdf, apiConvertUploadImages, apiConvertPdfToImage, apiConvertImageToPdf 
+} from './api.js';
 
-let mergeSessionData = {
-    sessionId: null,
-    files: [] // { fileId, filename, pageCount }
-};
+import { DOM } from './dom.js';
 
-let splitSessionData = {
-    sessionId: null,
-    filename: "",
-    totalPages: 0,
-    pages: [], // { page_num, width, height, image_url }
-    selectedPages: new Set(),
-    mode: "extract" // "extract" or "parts"
-};
-let splitCutPoints = new Set();
-
-let securitySessionData = {
-    sessionId: null,
-    filename: "",
-    fileSize: 0,
-    totalPages: 0,
-    isEncrypted: false
-};
-
-let compressSessionData = {
-    sessionId: null,
-    filename: "",
-    fileSize: 0,
-    level: "medium"
-};
-
-let organizeSessionData = {
-    sessionId: null,
-    filename: "",
-    totalPages: 0,
-    pages: [] // { page_num, width, height, image_url, rotation, deleted }
-};
-
-
-// DOM Elements
-const dashboardSection = document.getElementById("dashboardSection");
-const toolSanitizeCard = document.getElementById("toolSanitizeCard");
-const toolMergeCard = document.getElementById("toolMergeCard");
-const toolSplitCard = document.getElementById("toolSplitCard");
-const toolSecurityCard = document.getElementById("toolSecurityCard");
-const toolCompressCard = document.getElementById("toolCompressCard");
-
-const headerLogo = document.getElementById("headerLogo");
-
-const sanitizeBackBtn = document.getElementById("sanitizeBackBtn");
-const mergeBackBtn = document.getElementById("mergeBackBtn");
-const splitBackBtn = document.getElementById("splitBackBtn");
-const securityBackBtn = document.getElementById("securityBackBtn");
-const compressBackBtn = document.getElementById("compressBackBtn");
-const organizeBackBtn = document.getElementById("organizeBackBtn");
-
-const compressSection = document.getElementById("compressSection");
-const compressUploadCard = document.getElementById("compressUploadCard");
-const compressFileInput = document.getElementById("compressFileInput");
-const compressDropZone = document.getElementById("compressDropZone");
-const compressWorkspaceContainer = document.getElementById("compressWorkspaceContainer");
-const compressFileNameDisplay = document.getElementById("compressFileNameDisplay");
-const compressFileSizeDisplay = document.getElementById("compressFileSizeDisplay");
-
-// Configuration / Results Panels
-const compressConfigPanel = document.getElementById("compressConfigPanel");
-const compressResultsPanel = document.getElementById("compressResultsPanel");
-const executeCompressBtn = document.getElementById("executeCompressBtn");
-const closeCompressBtn = document.getElementById("closeCompressBtn");
-const downloadCompressedBtn = document.getElementById("downloadCompressedBtn");
-const closeCompressResultsBtn = document.getElementById("closeCompressResultsBtn");
-
-// Results Displays
-const originalSizeResult = document.getElementById("originalSizeResult");
-const compressedSizeResult = document.getElementById("compressedSizeResult");
-const savingPercentResult = document.getElementById("savingPercentResult");
-const savingAbsoluteResult = document.getElementById("savingAbsoluteResult");
-
-const organizeSection = document.getElementById("organizeSection");
-const organizeUploadCard = document.getElementById("organizeUploadCard");
-const organizeFileInput = document.getElementById("organizeFileInput");
-const organizeDropZone = document.getElementById("organizeDropZone");
-const organizeWorkspaceContainer = document.getElementById("organizeWorkspaceContainer");
-const organizeFileNameDisplay = document.getElementById("organizeFileNameDisplay");
-const organizeTotalPagesVal = document.getElementById("organizeTotalPagesVal");
-const organizeDeleteCountVal = document.getElementById("organizeDeleteCountVal");
-const organizeRotateCountVal = document.getElementById("organizeRotateCountVal");
-const executeOrganizeBtn = document.getElementById("executeOrganizeBtn");
-const clearOrganizeBtn = document.getElementById("clearOrganizeBtn");
-const organizeThumbnailGrid = document.getElementById("organizeThumbnailGrid");
-const closeOrganizeWorkspaceBtn = document.getElementById("closeOrganizeWorkspaceBtn");
-const toolOrganizeCard = document.getElementById("toolOrganizeCard");
-
-const securitySection = document.getElementById("securitySection");
-const securityUploadCard = document.getElementById("securityUploadCard");
-const securityFileInput = document.getElementById("securityFileInput");
-const securityDropZone = document.getElementById("securityDropZone");
-const securityWorkspaceContainer = document.getElementById("securityWorkspaceContainer");
-const securityFileNameDisplay = document.getElementById("securityFileNameDisplay");
-const securityPageCountDisplay = document.getElementById("securityPageCountDisplay");
-const securityFileSizeDisplay = document.getElementById("securityFileSizeDisplay");
-
-// Unlock Form Elements
-const securityUnlockOverlay = document.getElementById("securityUnlockOverlay");
-const securityUnlockPasswordInput = document.getElementById("securityUnlockPasswordInput");
-const toggleUnlockPasswordBtn = document.getElementById("toggleUnlockPasswordBtn");
-const executeUnlockBtn = document.getElementById("executeUnlockBtn");
-const closeUnlockBtn = document.getElementById("closeUnlockBtn");
-
-// Protect Form Elements
-const securityProtectOptions = document.getElementById("securityProtectOptions");
-const securityUserPasswordInput = document.getElementById("securityUserPasswordInput");
-const toggleUserPasswordBtn = document.getElementById("toggleUserPasswordBtn");
-const securityOwnerPasswordInput = document.getElementById("securityOwnerPasswordInput");
-const toggleOwnerPasswordBtn = document.getElementById("toggleOwnerPasswordBtn");
-const preventPrintToggle = document.getElementById("preventPrintToggle");
-const preventCopyToggle = document.getElementById("preventCopyToggle");
-const preventModifyToggle = document.getElementById("preventModifyToggle");
-const executeProtectBtn = document.getElementById("executeProtectBtn");
-const closeProtectBtn = document.getElementById("closeProtectBtn");
-
-
-const uploadSection = document.getElementById("uploadSection");
-const workspaceSection = document.getElementById("workspaceSection");
-const dropZone = document.getElementById("dropZone");
-const fileInput = document.getElementById("fileInput");
-const themeToggleBtn = document.getElementById("themeToggleBtn");
-const loadingModal = document.getElementById("loadingModal");
-const loadingText = document.getElementById("loadingText");
-const loadingProgressBar = document.getElementById("loadingProgressBar");
-
-// Workspace Elements
-const fileNameDisplay = document.getElementById("fileNameDisplay");
-const currentPageNum = document.getElementById("currentPageNum");
-const totalPagesNum = document.getElementById("totalPagesNum");
-const zoomDisplay = document.getElementById("zoomDisplay");
-const prevPageBtn = document.getElementById("prevPageBtn");
-const nextPageBtn = document.getElementById("nextPageBtn");
-const zoomInBtn = document.getElementById("zoomInBtn");
-const zoomOutBtn = document.getElementById("zoomOutBtn");
-const clearAllRedactionsBtn = document.getElementById("clearAllRedactionsBtn");
-const pdfViewer = document.getElementById("pdfViewer");
-
-// Thumbnail Sidebar Elements
-const toggleThumbnailsBtn = document.getElementById("toggleThumbnailsBtn");
-const thumbnailSidebar = document.getElementById("thumbnailSidebar");
-const thumbnailSidebarContent = document.getElementById("thumbnailSidebarContent");
-
-// Mobile Sidebar Drawer Elements
-const toggleRightSidebarBtn = document.getElementById("toggleRightSidebarBtn");
-const sidebarBackdrop = document.getElementById("sidebarBackdrop");
-const sidebarRight = document.querySelector(".sidebar-right");
-
-// Fit Presets
-const fitWidthBtn = document.getElementById("fitWidthBtn");
-const fitPageBtn = document.getElementById("fitPageBtn");
-
-// Sidebar Right & Tab Elements
-const totalFindingsBadge = document.getElementById("totalFindingsBadge");
-const aiFindingsTab = document.getElementById("aiFindingsTab");
-const manualSearchTab = document.getElementById("manualSearchTab");
-const settingsExportTab = document.getElementById("settingsExportTab");
-
-const aiFindingsContent = document.getElementById("aiFindingsContent");
-const manualSearchContent = document.getElementById("manualSearchContent");
-const settingsExportContent = document.getElementById("settingsExportContent");
-
-const searchInput = document.getElementById("searchInput");
-const regexToggleBtn = document.getElementById("regexToggleBtn");
-const searchBtn = document.getElementById("searchBtn");
-const findingsContainer = document.getElementById("findingsContainer");
-const searchResultsContainer = document.getElementById("searchResultsContainer");
-
-// Sidebar Settings Card Elements
-const propFileName = document.getElementById("propFileName");
-const propPageCount = document.getElementById("propPageCount");
-const propRedactionsCount = document.getElementById("propRedactionsCount");
-const stripMetadataCheckbox = document.getElementById("stripMetadataCheckbox");
-const sanitizeBtn = document.getElementById("sanitizeBtn");
-const closeWorkspaceBtn = document.getElementById("closeWorkspaceBtn");
-
-// Merge Elements
-const mergeDropZone = document.getElementById("mergeDropZone");
-const mergeFileInput = document.getElementById("mergeFileInput");
-const mergeFileListContainer = document.getElementById("mergeFileListContainer");
-const mergeFileList = document.getElementById("mergeFileList");
-const executeMergeBtn = document.getElementById("executeMergeBtn");
-const clearMergeBtn = document.getElementById("clearMergeBtn");
-
-// Split Elements
-const splitUploadCard = document.getElementById("splitUploadCard");
-const splitWorkspaceContainer = document.getElementById("splitWorkspaceContainer");
-const splitDropZone = document.getElementById("splitDropZone");
-const splitFileInput = document.getElementById("splitFileInput");
-const splitFileNameDisplay = document.getElementById("splitFileNameDisplay");
-const splitModeExtractBtn = document.getElementById("splitModeExtractBtn");
-const splitModePartsBtn = document.getElementById("splitModePartsBtn");
-const splitGuideTitle = document.getElementById("splitGuideTitle");
-const splitGuideText = document.getElementById("splitGuideText");
-const splitTotalPagesVal = document.getElementById("splitTotalPagesVal");
-const splitTargetCountVal = document.getElementById("splitTargetCountVal");
-const executeSplitBtn = document.getElementById("executeSplitBtn");
-const clearSplitBtn = document.getElementById("clearSplitBtn");
-const splitThumbnailGrid = document.getElementById("splitThumbnailGrid");
-const splitPartsRangeGroup = document.getElementById("splitPartsRangeGroup");
-const splitPartsInput = document.getElementById("splitPartsInput");
-const closeSplitWorkspaceBtn = document.getElementById("closeSplitWorkspaceBtn");
+const {
+    dashboardSection,
+    toolSanitizeCard,
+    toolMergeCard,
+    toolSplitCard,
+    toolSecurityCard,
+    toolCompressCard,
+    toolOrganizeCard,
+    toolWatermarkCard,
+    toolConvertCard,
+    headerLogo,
+    themeToggleBtn,
+    sanitizeBackBtn,
+    mergeBackBtn,
+    splitBackBtn,
+    securityBackBtn,
+    compressBackBtn,
+    organizeBackBtn,
+    watermarkBackBtn,
+    convertPdfBackBtn,
+    convertImgBackBtn,
+    uploadSection,
+    workspaceSection,
+    dropZone,
+    fileInput,
+    loadingModal,
+    loadingText,
+    loadingProgressBar,
+    fileNameDisplay,
+    currentPageNum,
+    totalPagesNum,
+    zoomDisplay,
+    prevPageBtn,
+    nextPageBtn,
+    zoomInBtn,
+    zoomOutBtn,
+    clearAllRedactionsBtn,
+    pdfViewer,
+    toggleThumbnailsBtn,
+    thumbnailSidebar,
+    thumbnailSidebarContent,
+    toggleRightSidebarBtn,
+    sidebarBackdrop,
+    sidebarRight,
+    fitWidthBtn,
+    fitPageBtn,
+    totalFindingsBadge,
+    aiFindingsTab,
+    manualSearchTab,
+    settingsExportTab,
+    aiFindingsContent,
+    manualSearchContent,
+    settingsExportContent,
+    searchInput,
+    regexToggleCheckbox,
+    searchBtn,
+    findingsContainer,
+    searchResultsContainer,
+    propFileName,
+    propPageCount,
+    propRedactionsCount,
+    stripMetadataCheckbox,
+    sanitizeBtn,
+    closeWorkspaceBtn,
+    mergeDropZone,
+    mergeFileInput,
+    mergeFileListContainer,
+    mergeFileList,
+    executeMergeBtn,
+    clearMergeBtn,
+    splitUploadCard,
+    splitWorkspaceContainer,
+    splitDropZone,
+    splitFileInput,
+    splitFileNameDisplay,
+    splitModeExtractBtn,
+    splitModePartsBtn,
+    splitGuideTitle,
+    splitGuideText,
+    splitTotalPagesVal,
+    splitTargetCountVal,
+    executeSplitBtn,
+    clearSplitBtn,
+    splitThumbnailGrid,
+    splitPartsRangeGroup,
+    splitPartsInput,
+    closeSplitWorkspaceBtn,
+    compressSection,
+    compressUploadCard,
+    compressFileInput,
+    compressDropZone,
+    compressWorkspaceContainer,
+    compressFileNameDisplay,
+    compressFileSizeDisplay,
+    compressConfigPanel,
+    compressResultsPanel,
+    executeCompressBtn,
+    closeCompressBtn,
+    downloadCompressedBtn,
+    closeCompressResultsBtn,
+    originalSizeResult,
+    compressedSizeResult,
+    savingPercentResult,
+    savingAbsoluteResult,
+    organizeSection,
+    organizeUploadCard,
+    organizeFileInput,
+    organizeDropZone,
+    organizeWorkspaceContainer,
+    organizeFileNameDisplay,
+    organizeTotalPagesVal,
+    organizeDeleteCountVal,
+    organizeRotateCountVal,
+    executeOrganizeBtn,
+    clearOrganizeBtn,
+    organizeThumbnailGrid,
+    closeOrganizeWorkspaceBtn,
+    organizeAddBlankBtn,
+    watermarkSection,
+    watermarkUploadCard,
+    watermarkFileInput,
+    watermarkDropZone,
+    watermarkWorkspaceContainer,
+    watermarkFileNameDisplay,
+    closeWatermarkWorkspaceBtn,
+    watermarkTypeTextBtn,
+    watermarkTypeImageBtn,
+    watermarkTextConfigGroup,
+    watermarkImageConfigGroup,
+    watermarkTextVal,
+    watermarkTextColor,
+    watermarkTextColorHex,
+    watermarkTextFontSize,
+    watermarkTextFontSizeLabel,
+    watermarkTextRotation,
+    watermarkTextRotationLabel,
+    logoUploadTriggerBtn,
+    watermarkLogoInput,
+    watermarkLogoFileName,
+    watermarkImageScale,
+    watermarkImageScaleLabel,
+    watermarkPosition,
+    watermarkOpacity,
+    watermarkOpacityLabel,
+    watermarkPagesMode,
+    watermarkCustomPagesGroup,
+    watermarkCustomPagesVal,
+    executeWatermarkBtn,
+    watermarkPreviewImage,
+    watermarkVisualOverlay,
+    watermarkCurrentPageNum,
+    watermarkTotalPagesNum,
+    watermarkPrevPageBtn,
+    watermarkNextPageBtn,
+    watermarkPreviewPageCard,
+    convertSection,
+    convertTabsPdfToImg,
+    convertTabsImgToPdf,
+    convertPdfToImgWorkspace,
+    convertPdfUploadCard,
+    convertPdfFileInput,
+    convertPdfDropZone,
+    convertPdfWorkspaceContainer,
+    convertPdfFileNameDisplay,
+    closeConvertPdfWorkspaceBtn,
+    convertImageFormat,
+    convertImageDpi,
+    convertImageDpiLabel,
+    convertPdfPagesMode,
+    convertPdfCustomPagesGroup,
+    convertPdfCustomPagesVal,
+    executePdfToImgBtn,
+    convertPdfPreviewPageCard,
+    convertPdfPreviewImage,
+    convertPdfCurrentPageNum,
+    convertPdfTotalPagesNum,
+    convertPdfPrevPageBtn,
+    convertPdfNextPageBtn,
+    convertImgToPdfWorkspace,
+    convertImgUploadCard,
+    convertImgFileInput,
+    convertImgDropZone,
+    convertImgWorkspaceContainer,
+    convertImgCountDisplay,
+    closeConvertImgWorkspaceBtn,
+    convertPdfFitMode,
+    convertStandardPageOptions,
+    convertPageSize,
+    convertPageOrientation,
+    executeImgToPdfBtn,
+    convertImageGrid,
+    securitySection,
+    securityUploadCard,
+    securityFileInput,
+    securityDropZone,
+    securityWorkspaceContainer,
+    securityFileNameDisplay,
+    securityPageCountDisplay,
+    securityFileSizeDisplay,
+    securityUnlockOverlay,
+    securityUnlockPasswordInput,
+    toggleUnlockPasswordBtn,
+    executeUnlockBtn,
+    closeUnlockBtn,
+    securityProtectOptions,
+    securityUserPasswordInput,
+    toggleUserPasswordBtn,
+    securityOwnerPasswordInput,
+    toggleOwnerPasswordBtn,
+    preventPrintToggle,
+    preventCopyToggle,
+    preventModifyToggle,
+    executeProtectBtn,
+    closeProtectBtn
+} = DOM;
 
 // Initialize Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
@@ -243,7 +257,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (securityBackBtn) securityBackBtn.addEventListener("click", returnToDashboard);
     if (compressBackBtn) compressBackBtn.addEventListener("click", returnToDashboard);
     if (organizeBackBtn) organizeBackBtn.addEventListener("click", returnToDashboard);
-
+    if (watermarkBackBtn) watermarkBackBtn.addEventListener("click", returnToDashboard);
+ 
     // Dashboard Cards (optional if present)
     if (toolSanitizeCard) toolSanitizeCard.addEventListener("click", () => switchAppMode("sanitize"));
     if (toolMergeCard) toolMergeCard.addEventListener("click", () => switchAppMode("merge"));
@@ -251,6 +266,49 @@ document.addEventListener("DOMContentLoaded", () => {
     if (toolSecurityCard) toolSecurityCard.addEventListener("click", () => switchAppMode("security"));
     if (toolCompressCard) toolCompressCard.addEventListener("click", () => switchAppMode("compress"));
     if (toolOrganizeCard) toolOrganizeCard.addEventListener("click", () => switchAppMode("organize"));
+    if (toolWatermarkCard) toolWatermarkCard.addEventListener("click", () => switchAppMode("watermark"));
+    if (toolConvertCard) toolConvertCard.addEventListener("click", () => switchAppMode("convert"));
+
+    // Initialize 3D Tilt & Cursor Glow for Dashboard Cards
+    document.querySelectorAll(".dashboard-card").forEach(card => {
+        card.addEventListener("mousemove", e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty("--mouse-x", `${(x / rect.width) * 100}%`);
+            card.style.setProperty("--mouse-y", `${(y / rect.height) * 100}%`);
+            
+            const xc = rect.width / 2;
+            const yc = rect.height / 2;
+            const tiltX = (yc - y) / 10;
+            const tiltY = (x - xc) / 10;
+            
+            card.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale3d(1.03, 1.03, 1.03)`;
+        });
+        card.addEventListener("mouseleave", () => {
+            card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)";
+        });
+    });
+
+    // Handle Tab Indicator resizing dynamically
+    window.addEventListener("resize", () => {
+        const activeTabBtn = document.querySelector(".sidebar-tab-btn.active");
+        if (activeTabBtn) {
+            const indicator = document.getElementById("sidebarTabIndicator");
+            if (indicator) {
+                indicator.style.transition = "none";
+                indicator.style.left = `${activeTabBtn.offsetLeft}px`;
+                indicator.style.width = `${activeTabBtn.offsetWidth}px`;
+                void indicator.offsetHeight;
+                indicator.style.transition = "all 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
+            }
+        }
+    });
+
+    // Position the tab indicator initially
+    setTimeout(() => {
+        switchMainTab("ai-findings");
+    }, 100);
 
     // File Drag & Drop (Sanitize)
     if (dropZone) {
@@ -334,8 +392,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (manualSearchTab) manualSearchTab.addEventListener("click", () => switchMainTab("manual-search"));
     if (settingsExportTab) settingsExportTab.addEventListener("click", () => switchMainTab("settings-export"));
 
-    // Inline Regex Toggle
-    if (regexToggleBtn) regexToggleBtn.addEventListener("click", toggleRegexSearch);
+    // Regex Toggle Switch
+    if (regexToggleCheckbox) {
+        regexToggleCheckbox.addEventListener("change", (e) => {
+            State.isRegexSearch = e.target.checked;
+            if (State.isRegexSearch) {
+                searchInput.placeholder = "Enter regular expression (e.g. \\b[A-Z]{3}\\d{4}\\b)...";
+            } else {
+                searchInput.placeholder = "Enter keyword to redact...";
+            }
+            saveAllStates();
+        });
+    }
     
     // Search Action
     if (searchBtn) searchBtn.addEventListener("click", handleCustomSearch);
@@ -456,7 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("click", () => {
             segmentBtns.forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
-            compressSessionData.level = btn.dataset.level;
+            State.compressSessionData.level = btn.dataset.level;
         });
     });
 
@@ -468,7 +536,7 @@ document.addEventListener("DOMContentLoaded", () => {
         downloadCompressedBtn.addEventListener("click", () => {
             const url = downloadCompressedBtn.dataset.downloadUrl;
             if (url) {
-                triggerFileDownload(url, `compressed_${compressSessionData.filename || "document.pdf"}`);
+                triggerFileDownload(url, `compressed_${State.compressSessionData.filename || "document.pdf"}`);
             }
         });
     }
@@ -494,10 +562,248 @@ document.addEventListener("DOMContentLoaded", () => {
         organizeFileInput.addEventListener("change", handleOrganizeFileSelect);
     }
 
-    // Organize Action Handlers
     if (executeOrganizeBtn) executeOrganizeBtn.addEventListener("click", runOrganize);
     if (clearOrganizeBtn) clearOrganizeBtn.addEventListener("click", clearOrganizeState);
     if (closeOrganizeWorkspaceBtn) closeOrganizeWorkspaceBtn.addEventListener("click", closeOrganizeWorkspace);
+    if (organizeAddBlankBtn) organizeAddBlankBtn.addEventListener("click", addOrganizeBlankPage);
+
+    // File Drag & Drop (Watermark)
+    if (watermarkDropZone) {
+        watermarkDropZone.addEventListener("click", () => {
+            watermarkFileInput.click();
+        });
+        watermarkDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            watermarkDropZone.classList.add("dragover");
+        });
+        watermarkDropZone.addEventListener("dragleave", () => {
+            watermarkDropZone.classList.remove("dragover");
+        });
+        watermarkDropZone.addEventListener("drop", handleWatermarkFileDrop);
+    }
+    if (watermarkFileInput) {
+        watermarkFileInput.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+        watermarkFileInput.addEventListener("change", handleWatermarkFileSelect);
+    }
+
+    // Watermark Type Toggles
+    if (watermarkTypeTextBtn) {
+        watermarkTypeTextBtn.addEventListener("click", () => switchWatermarkType("text"));
+    }
+    if (watermarkTypeImageBtn) {
+        watermarkTypeImageBtn.addEventListener("click", () => switchWatermarkType("image"));
+    }
+
+    // Logo Image Upload
+    if (logoUploadTriggerBtn) {
+        logoUploadTriggerBtn.addEventListener("click", () => watermarkLogoInput.click());
+    }
+    if (watermarkLogoInput) {
+        watermarkLogoInput.addEventListener("change", handleLogoSelect);
+    }
+
+    // Sliders & Inputs Real-time preview updates
+    if (watermarkTextVal) {
+        watermarkTextVal.addEventListener("input", (e) => {
+            State.watermarkSessionData.text = e.target.value;
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkTextColor) {
+        watermarkTextColor.addEventListener("input", (e) => {
+            State.watermarkSessionData.color = e.target.value;
+            if (watermarkTextColorHex) watermarkTextColorHex.innerText = e.target.value.toUpperCase();
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkTextFontSize) {
+        watermarkTextFontSize.addEventListener("input", (e) => {
+            State.watermarkSessionData.fontSize = parseInt(e.target.value);
+            if (watermarkTextFontSizeLabel) watermarkTextFontSizeLabel.innerText = e.target.value + "px";
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkTextRotation) {
+        watermarkTextRotation.addEventListener("input", (e) => {
+            State.watermarkSessionData.rotation = parseInt(e.target.value);
+            if (watermarkTextRotationLabel) watermarkTextRotationLabel.innerText = e.target.value + "°";
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkImageScale) {
+        watermarkImageScale.addEventListener("input", (e) => {
+            State.watermarkSessionData.scale = parseFloat(e.target.value) / 100;
+            if (watermarkImageScaleLabel) watermarkImageScaleLabel.innerText = (parseFloat(e.target.value) / 100).toFixed(1);
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkOpacity) {
+        watermarkOpacity.addEventListener("input", (e) => {
+            State.watermarkSessionData.opacity = parseFloat(e.target.value) / 100;
+            if (watermarkOpacityLabel) watermarkOpacityLabel.innerText = e.target.value + "%";
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkPosition) {
+        watermarkPosition.addEventListener("change", (e) => {
+            State.watermarkSessionData.position = e.target.value;
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkPagesMode) {
+        watermarkPagesMode.addEventListener("change", (e) => {
+            State.watermarkSessionData.pagesMode = e.target.value;
+            if (e.target.value === "custom") {
+                if (watermarkCustomPagesGroup) watermarkCustomPagesGroup.classList.remove("hidden");
+            } else {
+                if (watermarkCustomPagesGroup) watermarkCustomPagesGroup.classList.add("hidden");
+            }
+            updateWatermarkLivePreview();
+        });
+    }
+    if (watermarkCustomPagesVal) {
+        watermarkCustomPagesVal.addEventListener("input", (e) => {
+            State.watermarkSessionData.customPages = e.target.value;
+            updateWatermarkLivePreview();
+        });
+    }
+
+    // Pagination
+    if (watermarkPrevPageBtn) {
+        watermarkPrevPageBtn.addEventListener("click", () => {
+            if (State.watermarkSessionData.currentPage > 0) {
+                State.watermarkSessionData.currentPage--;
+                renderWatermarkPage();
+            }
+        });
+    }
+    if (watermarkNextPageBtn) {
+        watermarkNextPageBtn.addEventListener("click", () => {
+            if (State.watermarkSessionData.currentPage < State.watermarkSessionData.totalPages - 1) {
+                State.watermarkSessionData.currentPage++;
+                renderWatermarkPage();
+            }
+        });
+    }
+
+    // Execute & Workspace controls
+    if (executeWatermarkBtn) executeWatermarkBtn.addEventListener("click", runWatermark);
+    if (closeWatermarkWorkspaceBtn) closeWatermarkWorkspaceBtn.addEventListener("click", closeWatermarkWorkspace);
+    
+    // Convert Workspace Listeners
+    if (convertPdfBackBtn) convertPdfBackBtn.addEventListener("click", returnToDashboard);
+    if (convertImgBackBtn) convertImgBackBtn.addEventListener("click", returnToDashboard);
+    if (closeConvertPdfWorkspaceBtn) closeConvertPdfWorkspaceBtn.addEventListener("click", closeConvertPdfWorkspace);
+    if (closeConvertImgWorkspaceBtn) closeConvertImgWorkspaceBtn.addEventListener("click", closeConvertImgWorkspace);
+    
+    convertTabsPdfToImg.forEach(btn => {
+        btn.addEventListener("click", () => switchConvertTab("pdf-to-img"));
+    });
+    convertTabsImgToPdf.forEach(btn => {
+        btn.addEventListener("click", () => switchConvertTab("img-to-pdf"));
+    });
+
+    if (convertImageFormat) {
+        convertImageFormat.addEventListener("change", (e) => {
+            State.convertSessionData.pdfFormat = e.target.value;
+            saveAllStates();
+        });
+    }
+    if (convertImageDpi) {
+        convertImageDpi.addEventListener("input", (e) => {
+            State.convertSessionData.pdfDpi = parseInt(e.target.value);
+            if (convertImageDpiLabel) convertImageDpiLabel.innerText = e.target.value + " DPI";
+            saveAllStates();
+        });
+    }
+    if (convertPdfPagesMode) {
+        convertPdfPagesMode.addEventListener("change", (e) => {
+            State.convertSessionData.pdfPagesMode = e.target.value;
+            if (e.target.value === "custom") {
+                if (convertPdfCustomPagesGroup) convertPdfCustomPagesGroup.classList.remove("hidden");
+            } else {
+                if (convertPdfCustomPagesGroup) convertPdfCustomPagesGroup.classList.add("hidden");
+            }
+            saveAllStates();
+        });
+    }
+    if (convertPdfCustomPagesVal) {
+        convertPdfCustomPagesVal.addEventListener("input", (e) => {
+            State.convertSessionData.pdfCustomPages = e.target.value;
+            saveAllStates();
+        });
+    }
+    
+    if (convertPdfPrevPageBtn) {
+        convertPdfPrevPageBtn.addEventListener("click", () => {
+            if (State.convertSessionData.pdfCurrentPage > 0) {
+                State.convertSessionData.pdfCurrentPage--;
+                renderConvertPdfPage();
+            }
+        });
+    }
+    if (convertPdfNextPageBtn) {
+        convertPdfNextPageBtn.addEventListener("click", () => {
+            if (State.convertSessionData.pdfCurrentPage < State.convertSessionData.pdfTotalPages - 1) {
+                State.convertSessionData.pdfCurrentPage++;
+                renderConvertPdfPage();
+            }
+        });
+    }
+    
+    if (convertPdfFitMode) {
+        convertPdfFitMode.addEventListener("change", (e) => {
+            if (e.target.value === "standard") {
+                if (convertStandardPageOptions) convertStandardPageOptions.classList.remove("hidden");
+            } else {
+                if (convertStandardPageOptions) convertStandardPageOptions.classList.add("hidden");
+            }
+            saveAllStates();
+        });
+    }
+    if (convertPageSize) {
+        convertPageSize.addEventListener("change", () => saveAllStates());
+    }
+    if (convertPageOrientation) {
+        convertPageOrientation.addEventListener("change", () => saveAllStates());
+    }
+    
+    if (convertPdfDropZone) {
+        convertPdfDropZone.addEventListener("click", () => convertPdfFileInput.click());
+        convertPdfDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            convertPdfDropZone.classList.add("dragover");
+        });
+        convertPdfDropZone.addEventListener("dragleave", () => {
+            convertPdfDropZone.classList.remove("dragover");
+        });
+        convertPdfDropZone.addEventListener("drop", handleConvertPdfDrop);
+    }
+    if (convertPdfFileInput) {
+        convertPdfFileInput.addEventListener("click", (e) => e.stopPropagation());
+        convertPdfFileInput.addEventListener("change", handleConvertPdfSelect);
+    }
+
+    if (convertImgDropZone) {
+        convertImgDropZone.addEventListener("click", () => convertImgFileInput.click());
+        convertImgDropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            convertImgDropZone.classList.add("dragover");
+        });
+        convertImgDropZone.addEventListener("dragleave", () => {
+            convertImgDropZone.classList.remove("dragover");
+        });
+        convertImgDropZone.addEventListener("drop", handleConvertImgDrop);
+    }
+    if (convertImgFileInput) {
+        convertImgFileInput.addEventListener("click", (e) => e.stopPropagation());
+        convertImgFileInput.addEventListener("change", handleConvertImgSelect);
+    }
+
+    if (executePdfToImgBtn) executePdfToImgBtn.addEventListener("click", runPdfToImage);
+    if (executeImgToPdfBtn) executeImgToPdfBtn.addEventListener("click", runImageToPdf);
     
     // Monitor scroll inside viewer to update page indicator
     const viewerOuter = document.querySelector(".pdf-viewer-outer");
@@ -509,6 +815,39 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const state = JSON.parse(savedStateStr);
             restoreAllStates(state);
+            
+            // Re-render UI based on restored active mode
+            if (State.sessionData && State.sessionData.sessionId) {
+                renderFindingsList();
+                renderPDF();
+                renderThumbnails();
+                updateRedactionCount();
+            }
+            if (State.mergeSessionData && State.mergeSessionData.sessionId) {
+                renderMergeFileList();
+            }
+            if (State.splitSessionData && State.splitSessionData.sessionId) {
+                renderSplitThumbnails();
+            }
+            if (State.securitySessionData && State.securitySessionData.sessionId) {
+                renderSecurityWorkspace();
+            }
+            if (State.compressSessionData && State.compressSessionData.sessionId) {
+                renderCompressWorkspace();
+            }
+            if (State.organizeSessionData && State.organizeSessionData.sessionId) {
+                renderOrganizeWorkspace();
+            }
+            if (State.watermarkSessionData && State.watermarkSessionData.sessionId) {
+                renderWatermarkWorkspace();
+            }
+            if (State.convertSessionData) {
+                renderConvertWorkspace();
+            }
+            
+            if (state.activeMode && state.activeMode !== "dashboard") {
+                switchAppMode(state.activeMode);
+            }
         } catch (e) {
             console.error("Failed to restore session state:", e);
             sessionStorage.removeItem("secure_redact_state");
@@ -562,16 +901,7 @@ function uploadFile(file) {
         }
     }, 300);
     
-    fetch("/api/upload", {
-        method: "POST",
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.detail || "Upload failed") });
-        }
-        return response.json();
-    })
+    apiUploadPDF(file)
     .then(data => {
         clearInterval(progressInterval);
         updateProgress(100);
@@ -603,41 +933,54 @@ function updateProgress(progress) {
     loadingProgressBar.style.width = `${progress}%`;
 }
 
+const TABS = ["ai-findings", "manual-search", "settings-export"];
+
 // Workspace Tab Switching
 function switchMainTab(tabId) {
+    const nextTabIndex = TABS.indexOf(tabId);
+    const direction = nextTabIndex > State.currentTabIndex ? "left" : "right";
+    
     // Switch active states of tab buttons
+    let activeBtn = null;
     document.querySelectorAll(".sidebar-tab-btn").forEach(btn => {
         if (btn.dataset.tab === tabId) {
             btn.classList.add("active");
+            activeBtn = btn;
         } else {
             btn.classList.remove("active");
         }
     });
 
-    // Switch active states of tab pane containers
+    // Position sliding tab indicator
+    const indicator = document.getElementById("sidebarTabIndicator");
+    if (indicator && activeBtn) {
+        indicator.style.left = `${activeBtn.offsetLeft}px`;
+        indicator.style.width = `${activeBtn.offsetWidth}px`;
+    }
+
+    // Switch active states of tab pane containers and apply directional transitions
     document.querySelectorAll(".tab-content-pane").forEach(pane => {
-        if (pane.id === `${tabId.replace(/-([a-z])/g, g => g[1].toUpperCase())}Content`) {
+        const targetId = `${tabId.replace(/-([a-z])/g, g => g[1].toUpperCase())}Content`;
+        pane.classList.remove("slide-left", "slide-right");
+        
+        if (pane.id === targetId) {
             pane.classList.add("active");
+            if (nextTabIndex !== State.currentTabIndex) {
+                void pane.offsetWidth; // Force reflow to restart keyframe animations
+                pane.classList.add(direction === "left" ? "slide-left" : "slide-right");
+            }
         } else {
             pane.classList.remove("active");
         }
     });
+    
+    State.currentTabIndex = nextTabIndex;
 }
 
-// Inline Regex Toggle Handler
-function toggleRegexSearch() {
-    isRegexSearch = !isRegexSearch;
-    regexToggleBtn.classList.toggle("active", isRegexSearch);
-    if (isRegexSearch) {
-        searchInput.placeholder = "Enter regular expression (e.g. \\b[A-Z]{3}\\d{4}\\b)...";
-    } else {
-        searchInput.placeholder = "Enter keyword to redact...";
-    }
-}
 
 // Workspace Initialization
 function initializeWorkspace(data) {
-    sessionData = {
+    State.sessionData = {
         sessionId: data.session_id,
         filename: data.filename,
         totalPages: data.total_pages,
@@ -646,16 +989,18 @@ function initializeWorkspace(data) {
     };
     
     // Default: Redact all automatic findings
-    redactedFindingIds = new Set(sessionData.findings.map(f => f.id));
-    manualRedactions = [];
-    zoomLevel = 1.0;
+    State.redactedFindingIds = new Set(State.sessionData.findings.map(f => f.id));
+    State.manualRedactions = [];
+    State.zoomLevel = 1.0;
     zoomDisplay.innerText = "100%";
     
     // Update labels
-    fileNameDisplay.innerText = sessionData.filename;
-    propFileName.innerText = sessionData.filename;
-    propPageCount.innerText = sessionData.totalPages;
-    totalPagesNum.innerText = sessionData.totalPages;
+    fileNameDisplay.innerText = State.sessionData.filename;
+    fileNameDisplay.title = State.sessionData.filename;
+    propFileName.innerText = State.sessionData.filename;
+    propFileName.title = State.sessionData.filename;
+    propPageCount.innerText = State.sessionData.totalPages;
+    totalPagesNum.innerText = State.sessionData.totalPages;
     currentPageNum.innerText = "1";
     
     // Populate Sidebars
@@ -672,12 +1017,12 @@ function initializeWorkspace(data) {
         </div>
     `;
     
-    // Switch to findings tab by default
-    switchMainTab("ai-findings");
-    
-    // Switch views
+    // Switch views first so that elements are visible in the DOM and layout dimensions are correctly calculated
     uploadSection.classList.add("hidden");
     workspaceSection.classList.remove("hidden");
+    
+    // Switch to findings tab by default
+    switchMainTab("ai-findings");
     
     // Fit to width by default once layout dimensions are established
     setTimeout(() => {
@@ -688,9 +1033,9 @@ function initializeWorkspace(data) {
 // Populate Findings Sidebar accordion with specific PII category icons using Switch Toggles
 function renderFindingsList() {
     findingsContainer.innerHTML = "";
-    totalFindingsBadge.innerText = sessionData.findings.length;
+    totalFindingsBadge.innerText = State.sessionData.findings.length;
     
-    if (sessionData.findings.length === 0) {
+    if (State.sessionData.findings.length === 0) {
         findingsContainer.innerHTML = `
             <div class="sidebar-empty-state">
                 <i class="fa-solid fa-shield-circle-check"></i>
@@ -714,7 +1059,7 @@ function renderFindingsList() {
     
     // Group by category
     const grouped = {};
-    sessionData.findings.forEach(finding => {
+    State.sessionData.findings.forEach(finding => {
         if (!grouped[finding.category]) {
             grouped[finding.category] = [];
         }
@@ -728,7 +1073,7 @@ function renderFindingsList() {
         groupEl.className = "findings-category-group";
         
         // Header
-        const allChecked = items.every(item => redactedFindingIds.has(item.id));
+        const allChecked = items.every(item => State.redactedFindingIds.has(item.id));
         const checkedAttr = allChecked ? "checked" : "";
         const iconClass = CATEGORY_ICONS[category] || "fa-eye";
         
@@ -753,7 +1098,7 @@ function renderFindingsList() {
         items.forEach(item => {
             const itemRow = document.createElement("div");
             itemRow.className = "finding-item-row";
-            const isRedacted = redactedFindingIds.has(item.id);
+            const isRedacted = State.redactedFindingIds.has(item.id);
             
             itemRow.innerHTML = `
                 <div class="finding-left">
@@ -804,9 +1149,9 @@ function renderFindingsList() {
 // Toggle redaction status of a finding
 function toggleFindingRedaction(id, check, triggerListRender = true) {
     if (check) {
-        redactedFindingIds.add(id);
+        State.redactedFindingIds.add(id);
     } else {
-        redactedFindingIds.delete(id);
+        State.redactedFindingIds.delete(id);
     }
     
     // Update individual visual block
@@ -847,207 +1192,6 @@ function updateCategoryMasterCheckboxes() {
 }
 
 // Render PDF pages
-function renderPDF() {
-    pdfViewer.innerHTML = "";
-    
-    sessionData.pages.forEach(page => {
-        const pageContainer = document.createElement("div");
-        pageContainer.id = `page-container-${page.page_num}`;
-        pageContainer.className = "page-container";
-        
-        const scaledWidth = page.width * zoomLevel;
-        const scaledHeight = page.height * zoomLevel;
-        
-        pageContainer.style.width = `${scaledWidth}px`;
-        pageContainer.style.height = `${scaledHeight}px`;
-        
-        const img = document.createElement("img");
-        img.className = "page-image";
-        img.src = page.image_url;
-        img.style.width = "100%";
-        img.style.height = "100%";
-        
-        const overlay = document.createElement("div");
-        overlay.id = `page-overlay-${page.page_num}`;
-        overlay.className = "page-overlay";
-        overlay.dataset.pageNum = page.page_num;
-        
-        // Setup Drag & Draw Events
-        setupDrawingEvents(overlay, page);
-        
-        pageContainer.appendChild(img);
-        pageContainer.appendChild(overlay);
-        pdfViewer.appendChild(pageContainer);
-        
-        // Trigger rendering of highlights inside overlay
-        renderPageOverlays(page.page_num, overlay, page);
-    });
-}
-
-function reRenderAllOverlays() {
-    sessionData.pages.forEach(page => {
-        const overlay = document.getElementById(`page-overlay-${page.page_num}`);
-        if (overlay) {
-            renderPageOverlays(page.page_num, overlay, page);
-        }
-    });
-}
-
-// Render redactions (auto & manual) for a specific page using percentage-based positions
-function renderPageOverlays(page_num, overlay, page) {
-    overlay.innerHTML = "";
-    
-    // 1. Render Auto-detected findings on this page
-    const pageFindings = sessionData.findings.filter(f => f.page_num === page_num);
-    pageFindings.forEach(finding => {
-        const isRedacted = redactedFindingIds.has(finding.id);
-        
-        finding.rects.forEach(rect => {
-            const rectEl = document.createElement("div");
-            rectEl.className = "redaction-highlight";
-            if (isRedacted) rectEl.classList.add("redacted");
-            
-            rectEl.dataset.findingId = finding.id;
-            rectEl.dataset.tooltip = `${finding.category}: ${finding.text}`;
-            
-            // Set percentage position and size relative to parent container
-            rectEl.style.left = `${(rect.x0 / page.width) * 100}%`;
-            rectEl.style.top = `${(rect.y0 / page.height) * 100}%`;
-            rectEl.style.width = `${((rect.x1 - rect.x0) / page.width) * 100}%`;
-            rectEl.style.height = `${((rect.y1 - rect.y0) / page.height) * 100}%`;
-            
-            // Toggle highlight click
-            rectEl.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const nowRedacted = !redactedFindingIds.has(finding.id);
-                toggleFindingRedaction(finding.id, nowRedacted);
-                
-                // Update checkbox in sidebar
-                const cb = document.querySelector(`.finding-item-cb[data-finding-id="${finding.id}"]`);
-                if (cb) cb.checked = nowRedacted;
-            });
-            
-            overlay.appendChild(rectEl);
-        });
-    });
-    
-    // 2. Render Manual Redactions on this page
-    const pageManuals = manualRedactions.filter(m => m.page_num === page_num);
-    pageManuals.forEach(man => {
-        const manEl = document.createElement("div");
-        manEl.className = "manual-redaction-box";
-        
-        // Set percentage position and size relative to parent container
-        manEl.style.left = `${(man.x0 / page.width) * 100}%`;
-        manEl.style.top = `${(man.y0 / page.height) * 100}%`;
-        manEl.style.width = `${((man.x1 - man.x0) / page.width) * 100}%`;
-        manEl.style.height = `${((man.y1 - man.y0) / page.height) * 100}%`;
-        
-        // Delete button
-        const delBtn = document.createElement("div");
-        delBtn.className = "manual-redaction-delete";
-        delBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-        delBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            removeManualRedaction(man.id);
-        });
-        
-        manEl.appendChild(delBtn);
-        overlay.appendChild(manEl);
-    });
-}
-
-// Setup Canvas drawing handlers for manual redaction
-function setupDrawingEvents(overlay, page) {
-    let startX = 0;
-    let startY = 0;
-    let isDrawing = false;
-    let activeSelectionRect = null;
-    
-    overlay.addEventListener("mousedown", (e) => {
-        if (e.target !== overlay) return; // avoid drawing when clicking existing boxes
-        
-        isDrawing = true;
-        
-        const rect = overlay.getBoundingClientRect();
-        startX = e.clientX - rect.left;
-        startY = e.clientY - rect.top;
-        
-        // Create selection container representation
-        activeSelectionRect = document.createElement("div");
-        activeSelectionRect.className = "selection-rect";
-        activeSelectionRect.style.left = `${startX}px`;
-        activeSelectionRect.style.top = `${startY}px`;
-        overlay.appendChild(activeSelectionRect);
-    });
-    
-    overlay.addEventListener("mousemove", (e) => {
-        if (!isDrawing || !activeSelectionRect) return;
-        
-        const rect = overlay.getBoundingClientRect();
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        
-        const left = Math.min(startX, currentX);
-        const top = Math.min(startY, currentY);
-        const width = Math.abs(startX - currentX);
-        const height = Math.abs(startY - currentY);
-        
-        activeSelectionRect.style.left = `${left}px`;
-        activeSelectionRect.style.top = `${top}px`;
-        activeSelectionRect.style.width = `${width}px`;
-        activeSelectionRect.style.height = `${height}px`;
-    });
-    
-    const endDrawing = (e) => {
-        if (!isDrawing) return;
-        isDrawing = false;
-        
-        if (activeSelectionRect) {
-            const rect = overlay.getBoundingClientRect();
-            const endX = e.clientX - rect.left;
-            const endY = e.clientY - rect.top;
-            
-            const left = Math.min(startX, endX);
-            const top = Math.min(startY, endY);
-            const width = Math.abs(startX - endX);
-            const height = Math.abs(startY - endY);
-            
-            // Remove helper outline
-            activeSelectionRect.remove();
-            activeSelectionRect = null;
-            
-            // Add if drawn region has minimum drag size
-            if (width > 6 && height > 6) {
-                // Compute current scale based on layout dimensions
-                const scaleX = overlay.clientWidth / page.width;
-                const scaleY = overlay.clientHeight / page.height;
-                const newRedaction = {
-                    id: Math.random().toString(36).substring(2, 9),
-                    page_num: page.page_num,
-                    x0: left / scaleX,
-                    y0: top / scaleY,
-                    x1: (left + width) / scaleX,
-                    y1: (top + height) / scaleY
-                };
-                
-                manualRedactions.push(newRedaction);
-                renderPageOverlays(page.page_num, overlay, page);
-                updateRedactionCount();
-            }
-        }
-    };
-    
-    overlay.addEventListener("mouseup", endDrawing);
-    overlay.addEventListener("mouseleave", endDrawing);
-}
-
-function removeManualRedaction(id) {
-    manualRedactions = manualRedactions.filter(m => m.id !== id);
-    reRenderAllOverlays();
-    updateRedactionCount();
-}
-
 // Render custom search results inside the search tab list with Switch Toggles
 function renderSearchResultsList(results, query) {
     searchResultsContainer.innerHTML = "";
@@ -1064,7 +1208,7 @@ function renderSearchResultsList(results, query) {
     results.forEach(item => {
         const itemRow = document.createElement("div");
         itemRow.className = "finding-item-row";
-        const isRedacted = redactedFindingIds.has(item.id);
+        const isRedacted = State.redactedFindingIds.has(item.id);
         
         itemRow.innerHTML = `
             <div class="finding-left">
@@ -1099,21 +1243,7 @@ function handleCustomSearch() {
     
     showLoading(true, "Searching Document...", 40);
     
-    fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            session_id: sessionData.sessionId,
-            query: query,
-            is_regex: isRegexSearch
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.detail || "Search failed") });
-        }
-        return response.json();
-    })
+    apiSearchPDF(State.sessionData.sessionId, query, State.isRegexSearch)
     .then(data => {
         showLoading(false);
         
@@ -1125,10 +1255,10 @@ function handleCustomSearch() {
         // Add new findings to session findings
         data.results.forEach(result => {
             // Check if finding is already added to avoid double counts
-            const exists = sessionData.findings.some(f => f.text === result.text && f.page_num === result.page_num);
+            const exists = State.sessionData.findings.some(f => f.text === result.text && f.page_num === result.page_num);
             if (!exists) {
-                sessionData.findings.push(result);
-                redactedFindingIds.add(result.id); // Auto-check new search results
+                State.sessionData.findings.push(result);
+                State.redactedFindingIds.add(result.id); // Auto-check new search results
             }
         });
         
@@ -1154,119 +1284,11 @@ function handleCustomSearch() {
 }
 
 // Workspace Zoom Adjustment (In-place DOM scaling)
-function adjustZoom(factor) {
-    let newZoom = zoomLevel + factor;
-    newZoom = Math.max(0.3, Math.min(3.0, newZoom));
-    applyZoom(newZoom);
-}
-
-// Apply zoom factor by resizing the elements directly (avoiding DOM recreation)
-function applyZoom(value) {
-    zoomLevel = value;
-    if (zoomDisplay) {
-        zoomDisplay.innerText = `${Math.round(zoomLevel * 100)}%`;
-    }
-    
-    sessionData.pages.forEach(page => {
-        const pageContainer = document.getElementById(`page-container-${page.page_num}`);
-        if (pageContainer) {
-            const scaledWidth = page.width * zoomLevel;
-            const scaledHeight = page.height * zoomLevel;
-            pageContainer.style.width = `${scaledWidth}px`;
-            pageContainer.style.height = `${scaledHeight}px`;
-        }
-    });
-}
-
-// Fit page to available width
-function fitToWidth() {
-    if (!sessionData.pages || sessionData.pages.length === 0) return;
-    const viewerOuter = document.querySelector(".pdf-viewer-outer");
-    if (!viewerOuter) return;
-    
-    const availableWidth = viewerOuter.clientWidth - 64; // subtract padding
-    const pageWidth = sessionData.pages[0].width;
-    const newZoom = availableWidth / pageWidth;
-    
-    applyZoom(newZoom);
-}
-
-// Fit page to available height
-function fitToPage() {
-    if (!sessionData.pages || sessionData.pages.length === 0) return;
-    const viewerOuter = document.querySelector(".pdf-viewer-outer");
-    if (!viewerOuter) return;
-    
-    const availableHeight = viewerOuter.clientHeight - 64; // subtract padding
-    const pageHeight = sessionData.pages[0].height;
-    const newZoom = availableHeight / pageHeight;
-    
-    applyZoom(newZoom);
-}
-
-// Scrolling Page Navigations
-function scrollToPage(pageNum) {
-    const pageContainer = document.getElementById(`page-container-${pageNum}`);
-    if (pageContainer) {
-        pageContainer.scrollIntoView({ behavior: "smooth", block: "start" });
-        
-        // Apply brief focus flash effect
-        pageContainer.style.outline = "2px solid var(--primary)";
-        setTimeout(() => {
-            pageContainer.style.outline = "none";
-        }, 1200);
-    }
-}
-
-function scrollToPrevPage() {
-    const activePage = getCurrentVisiblePage();
-    if (activePage > 0) {
-        scrollToPage(activePage - 1);
-    }
-}
-
-function scrollToNextPage() {
-    const activePage = getCurrentVisiblePage();
-    if (activePage < sessionData.totalPages - 1) {
-        scrollToPage(activePage + 1);
-    }
-}
-
-// Helper to check which page is currently in view
-function getCurrentVisiblePage() {
-    const containers = document.querySelectorAll(".page-container");
-    const viewerOuter = document.querySelector(".pdf-viewer-outer");
-    const outerRect = viewerOuter.getBoundingClientRect();
-    const center = outerRect.top + (outerRect.height / 2);
-    
-    let closestPage = 0;
-    let minDistance = Infinity;
-    
-    containers.forEach((container, idx) => {
-        const rect = container.getBoundingClientRect();
-        const elementCenter = rect.top + (rect.height / 2);
-        const distance = Math.abs(center - elementCenter);
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestPage = idx;
-        }
-    });
-    
-    return closestPage;
-}
-
-function handleViewerScroll() {
-    if (!sessionData.sessionId) return;
-    const activePage = getCurrentVisiblePage();
-    currentPageNum.innerText = activePage + 1;
-    updateActiveThumbnail(activePage);
-}
-
 // Global actions
 function clearAllRedactions() {
     if (confirm("Are you sure you want to clear all manual and automatic redactions?")) {
-        redactedFindingIds.clear();
-        manualRedactions = [];
+        State.redactedFindingIds.clear();
+        State.manualRedactions = [];
         
         // Uncheck all sidebar items
         document.querySelectorAll(".finding-item-cb").forEach(cb => cb.checked = false);
@@ -1279,18 +1301,18 @@ function clearAllRedactions() {
 
 function updateRedactionCount() {
     // Count active auto findings + manual boxes
-    const activeAutoCount = Array.from(redactedFindingIds).reduce((acc, id) => {
-        const finding = sessionData.findings.find(f => f.id === id);
+    const activeAutoCount = Array.from(State.redactedFindingIds).reduce((acc, id) => {
+        const finding = State.sessionData.findings.find(f => f.id === id);
         return acc + (finding ? finding.rects.length : 0);
     }, 0);
     
-    const totalCount = activeAutoCount + manualRedactions.length;
+    const totalCount = activeAutoCount + State.manualRedactions.length;
     propRedactionsCount.innerText = totalCount;
 }
 
 // Save Redactions & metadata to compile PDF
 function runSanitization() {
-    if (sessionData.findings.length === 0 && manualRedactions.length === 0) {
+    if (State.sessionData.findings.length === 0 && State.manualRedactions.length === 0) {
         alert("No redactions defined to sanitize this document.");
         return;
     }
@@ -1301,17 +1323,17 @@ function runSanitization() {
     const redactionPayload = [];
     
     // Build redactions payload
-    for (let pNum = 0; pNum < sessionData.totalPages; pNum++) {
+    for (let pNum = 0; pNum < State.sessionData.totalPages; pNum++) {
         const pageRects = [];
         
         // Add checked auto findings
-        const pageFindings = sessionData.findings.filter(f => f.page_num === pNum && redactedFindingIds.has(f.id));
+        const pageFindings = State.sessionData.findings.filter(f => f.page_num === pNum && State.redactedFindingIds.has(f.id));
         pageFindings.forEach(f => {
             pageRects.push(...f.rects);
         });
         
         // Add manual highlights
-        const pageManuals = manualRedactions.filter(m => m.page_num === pNum);
+        const pageManuals = State.manualRedactions.filter(m => m.page_num === pNum);
         pageManuals.forEach(m => {
             pageRects.push({ x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 });
         });
@@ -1327,33 +1349,17 @@ function runSanitization() {
     updateProgress(50);
     
     const requestBody = {
-        session_id: sessionData.sessionId,
+        session_id: State.sessionData.sessionId,
         redactions: redactionPayload,
         strip_metadata: stripMetadataCheckbox.checked
     };
     
-    fetch("/api/redact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.detail || "Sanitization request failed") });
-        }
-        return response.json();
-    })
+    apiRedactPDF(State.sessionData.sessionId, redactionPayload, stripMetadataCheckbox.checked)
     .then(data => {
         updateProgress(90);
         
         // Trigger file download
-        const downloadUrl = data.download_url;
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = `redacted_${sessionData.filename}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        triggerFileDownload(data.download_url, `redacted_${State.sessionData.filename}`);
         
         updateProgress(100);
         setTimeout(() => {
@@ -1369,15 +1375,15 @@ function runSanitization() {
 }
 
 function closeWorkspace() {
-    sessionData = {
+    State.sessionData = {
         sessionId: null,
         filename: "",
         totalPages: 0,
         pages: [],
         findings: []
     };
-    redactedFindingIds.clear();
-    manualRedactions = [];
+    State.redactedFindingIds.clear();
+    State.manualRedactions = [];
     
     pdfViewer.innerHTML = "";
     findingsContainer.innerHTML = "";
@@ -1411,54 +1417,6 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-}
-
-// Build and render page thumbnails in the sidebar
-function renderThumbnails() {
-    if (!thumbnailSidebarContent) return;
-    thumbnailSidebarContent.innerHTML = "";
-    
-    sessionData.pages.forEach(page => {
-        const item = document.createElement("div");
-        item.className = "thumbnail-item";
-        item.id = `thumbnail-item-${page.page_num}`;
-        if (page.page_num === 0) {
-            item.classList.add("active-thumbnail");
-        }
-        
-        item.innerHTML = `
-            <div class="thumbnail-image-container">
-                <img src="${page.image_url}" alt="Page ${page.page_num + 1}">
-            </div>
-            <span class="thumbnail-page-number">Page ${page.page_num + 1}</span>
-        `;
-        
-        item.addEventListener("click", () => {
-            scrollToPage(page.page_num);
-        });
-        
-        thumbnailSidebarContent.appendChild(item);
-    });
-}
-
-// Highlight active thumbnail and scroll it into view inside the sidebar
-function updateActiveThumbnail(pageNum) {
-    document.querySelectorAll(".thumbnail-item").forEach(item => {
-        item.classList.remove("active-thumbnail");
-    });
-    
-    const activeThumb = document.getElementById(`thumbnail-item-${pageNum}`);
-    if (activeThumb) {
-        activeThumb.classList.add("active-thumbnail");
-        activeThumb.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-}
-
-// Collapse/Expand Thumbnail Sidebar
-function toggleThumbnailSidebar() {
-    if (thumbnailSidebar) {
-        thumbnailSidebar.classList.toggle("collapsed");
-    }
 }
 
 // // Mobile sidebar drawer toggles
@@ -1504,15 +1462,16 @@ function switchAppMode(mode) {
     const mergeSec = document.getElementById("mergeSection");
     const splitSec = document.getElementById("splitSection");
     if (mergeSec) mergeSec.classList.add("hidden");
-    if (splitSec) splitSec.classList.add("hidden");
-    if (securitySection) securitySection.classList.add("hidden");
+    if (splitSec) splitSec.classList.add("hidden");    if (securitySection) securitySection.classList.add("hidden");
     if (compressSection) compressSection.classList.add("hidden");
     if (organizeSection) organizeSection.classList.add("hidden");
-
+    if (watermarkSection) watermarkSection.classList.add("hidden");
+    if (convertSection) convertSection.classList.add("hidden");
+ 
     if (mode === "dashboard") {
         if (dashboardSection) dashboardSection.classList.remove("hidden");
     } else if (mode === "sanitize") {
-        if (sessionData.sessionId) {
+        if (State.sessionData.sessionId) {
             if (workspaceSection) workspaceSection.classList.remove("hidden");
         } else {
             if (uploadSection) uploadSection.classList.remove("hidden");
@@ -1522,7 +1481,7 @@ function switchAppMode(mode) {
         renderMergeFileList();
     } else if (mode === "split") {
         if (splitSec) splitSec.classList.remove("hidden");
-        if (splitSessionData.sessionId) {
+        if (State.splitSessionData.sessionId) {
             if (splitUploadCard) splitUploadCard.classList.add("hidden");
             if (splitWorkspaceContainer) splitWorkspaceContainer.classList.remove("hidden");
             renderSplitThumbnails();
@@ -1532,7 +1491,7 @@ function switchAppMode(mode) {
         }
     } else if (mode === "security") {
         if (securitySection) securitySection.classList.remove("hidden");
-        if (securitySessionData.sessionId) {
+        if (State.securitySessionData.sessionId) {
             if (securityUploadCard) securityUploadCard.classList.add("hidden");
             if (securityWorkspaceContainer) securityWorkspaceContainer.classList.remove("hidden");
             renderSecurityWorkspace();
@@ -1542,7 +1501,7 @@ function switchAppMode(mode) {
         }
     } else if (mode === "compress") {
         if (compressSection) compressSection.classList.remove("hidden");
-        if (compressSessionData.sessionId) {
+        if (State.compressSessionData.sessionId) {
             if (compressUploadCard) compressUploadCard.classList.add("hidden");
             if (compressWorkspaceContainer) compressWorkspaceContainer.classList.remove("hidden");
             renderCompressWorkspace();
@@ -1552,7 +1511,7 @@ function switchAppMode(mode) {
         }
     } else if (mode === "organize") {
         if (organizeSection) organizeSection.classList.remove("hidden");
-        if (organizeSessionData.sessionId) {
+        if (State.organizeSessionData.sessionId) {
             if (organizeUploadCard) organizeUploadCard.classList.add("hidden");
             if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.remove("hidden");
             renderOrganizeWorkspace();
@@ -1560,6 +1519,19 @@ function switchAppMode(mode) {
             if (organizeUploadCard) organizeUploadCard.classList.remove("hidden");
             if (organizeWorkspaceContainer) organizeWorkspaceContainer.classList.add("hidden");
         }
+    } else if (mode === "watermark") {
+        if (watermarkSection) watermarkSection.classList.remove("hidden");
+        if (State.watermarkSessionData.sessionId) {
+            if (watermarkUploadCard) watermarkUploadCard.classList.add("hidden");
+            if (watermarkWorkspaceContainer) watermarkWorkspaceContainer.classList.remove("hidden");
+            renderWatermarkWorkspace();
+        } else {
+            if (watermarkUploadCard) watermarkUploadCard.classList.remove("hidden");
+            if (watermarkWorkspaceContainer) watermarkWorkspaceContainer.classList.add("hidden");
+        }
+    } else if (mode === "convert") {
+        if (convertSection) convertSection.classList.remove("hidden");
+        renderConvertWorkspace();
     }
 }
 
@@ -1574,6 +1546,8 @@ function returnToDashboard() {
     closeSecurityWorkspace(); // Cleans security state
     closeCompressWorkspace(); // Cleans compress state
     closeOrganizeWorkspace(); // Cleans organize state
+    closeWatermarkWorkspace(); // Cleans watermark state
+    closeConvertWorkspace(); // Cleans convert state
     
     switchAppMode("dashboard");
 }
@@ -1615,23 +1589,14 @@ function uploadMergeFiles(files) {
         const file = files[index];
         const formData = new FormData();
         formData.append("file", file);
-        if (mergeSessionData.sessionId) {
-            formData.append("session_id", mergeSessionData.sessionId);
+        if (State.mergeSessionData.sessionId) {
+            formData.append("session_id", State.mergeSessionData.sessionId);
         }
 
-        fetch("/api/merge/upload", {
-            method: "POST",
-            body: formData
-        })
-        .then(res => {
-            if (!res.ok) {
-                return res.json().then(err => { throw new Error(err.detail || `Upload failed for ${file.name}`) });
-            }
-            return res.json();
-        })
+        apiMergeUpload(file, State.mergeSessionData.sessionId)
         .then(data => {
-            mergeSessionData.sessionId = data.session_id;
-            mergeSessionData.files.push({
+            State.mergeSessionData.sessionId = data.session_id;
+            State.mergeSessionData.files.push({
                 fileId: data.file_id,
                 filename: data.filename,
                 pageCount: data.page_count,
@@ -1653,14 +1618,14 @@ function uploadMergeFiles(files) {
 
 function renderMergeFileList() {
     mergeFileList.innerHTML = "";
-    if (mergeSessionData.files.length === 0) {
+    if (State.mergeSessionData.files.length === 0) {
         mergeFileListContainer.classList.add("hidden");
         return;
     }
 
     mergeFileListContainer.classList.remove("hidden");
 
-    mergeSessionData.files.forEach((file, index) => {
+    State.mergeSessionData.files.forEach((file, index) => {
         const item = document.createElement("div");
         item.className = "merge-file-item";
         item.draggable = true;
@@ -1681,7 +1646,7 @@ function renderMergeFileList() {
                 <button class="merge-action-btn move-up" title="Move Up" ${index === 0 ? "disabled" : ""}>
                     <i class="fa-solid fa-arrow-up"></i>
                 </button>
-                <button class="merge-action-btn move-down" title="Move Down" ${index === mergeSessionData.files.length - 1 ? "disabled" : ""}>
+                <button class="merge-action-btn move-down" title="Move Down" ${index === State.mergeSessionData.files.length - 1 ? "disabled" : ""}>
                     <i class="fa-solid fa-arrow-down"></i>
                 </button>
                 <button class="merge-action-btn delete" title="Remove File">
@@ -1702,15 +1667,15 @@ function renderMergeFileList() {
 
 function moveMergeFile(index, direction) {
     const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= mergeSessionData.files.length) return;
+    if (targetIndex < 0 || targetIndex >= State.mergeSessionData.files.length) return;
 
-    const file = mergeSessionData.files.splice(index, 1)[0];
-    mergeSessionData.files.splice(targetIndex, 0, file);
+    const file = State.mergeSessionData.files.splice(index, 1)[0];
+    State.mergeSessionData.files.splice(targetIndex, 0, file);
     renderMergeFileList();
 }
 
 function removeMergeFile(index) {
-    mergeSessionData.files.splice(index, 1);
+    State.mergeSessionData.files.splice(index, 1);
     renderMergeFileList();
 }
 
@@ -1757,46 +1722,28 @@ function setupMergeDragAndDrop(item) {
         const toIndex = parseInt(item.dataset.index);
 
         if (fromIndex !== toIndex) {
-            const file = mergeSessionData.files.splice(fromIndex, 1)[0];
-            mergeSessionData.files.splice(toIndex, 0, file);
+            const file = State.mergeSessionData.files.splice(fromIndex, 1)[0];
+            State.mergeSessionData.files.splice(toIndex, 0, file);
             renderMergeFileList();
         }
     });
 }
 
 function runMerge() {
-    if (mergeSessionData.files.length < 2) {
+    if (State.mergeSessionData.files.length < 2) {
         alert("Please upload at least 2 PDF files to merge.");
         return;
     }
 
     showLoading(true, "Merging documents...", 50);
 
-    const fileIds = mergeSessionData.files.map(f => f.fileId);
+    const fileIds = State.mergeSessionData.files.map(f => f.fileId);
 
-    fetch("/api/merge/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            session_id: mergeSessionData.sessionId,
-            file_ids: fileIds
-        })
-    })
-    .then(res => {
-        if (!res.ok) {
-            return res.json().then(err => { throw new Error(err.detail || "Merge failed") });
-        }
-        return res.json();
-    })
+    apiMergeExecute(State.mergeSessionData.sessionId, fileIds)
     .then(data => {
         updateProgress(90);
         
-        const link = document.createElement("a");
-        link.href = data.download_url;
-        link.download = "merged_document.pdf";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        triggerFileDownload(data.download_url, "merged_document.pdf");
 
         updateProgress(100);
         setTimeout(() => {
@@ -1812,7 +1759,7 @@ function runMerge() {
 }
 
 function clearMergeState() {
-    mergeSessionData = {
+    State.mergeSessionData = {
         sessionId: null,
         files: []
     };
@@ -1846,16 +1793,7 @@ function uploadSplitFile(file) {
     const formData = new FormData();
     formData.append("file", file);
 
-    fetch("/api/split/upload", {
-        method: "POST",
-        body: formData
-    })
-    .then(res => {
-        if (!res.ok) {
-            return res.json().then(err => { throw new Error(err.detail || "Upload failed") });
-        }
-        return res.json();
-    })
+    apiSplitUpload(file)
     .then(data => {
         showLoading(false);
         initializeSplitWorkspace(data);
@@ -1868,7 +1806,7 @@ function uploadSplitFile(file) {
 }
 
 function initializeSplitWorkspace(data) {
-    splitSessionData = {
+    State.splitSessionData = {
         sessionId: data.session_id,
         filename: data.filename,
         totalPages: data.total_pages,
@@ -1877,8 +1815,9 @@ function initializeSplitWorkspace(data) {
         mode: "extract"
     };
 
-    splitFileNameDisplay.innerText = splitSessionData.filename;
-    splitTotalPagesVal.innerText = splitSessionData.totalPages;
+    splitFileNameDisplay.innerText = State.splitSessionData.filename;
+    splitFileNameDisplay.title = State.splitSessionData.filename;
+    splitTotalPagesVal.innerText = State.splitSessionData.totalPages;
     splitTargetCountVal.innerText = "0 selected";
 
     splitPartsRangeGroup.classList.add("hidden");
@@ -1897,20 +1836,20 @@ function initializeSplitWorkspace(data) {
 
 function renderSplitThumbnails() {
     splitThumbnailGrid.innerHTML = "";
-    const totalPages = splitSessionData.totalPages;
+    const totalPages = State.splitSessionData.totalPages;
     
-    splitSessionData.pages.forEach((page, index) => {
+    State.splitSessionData.pages.forEach((page, index) => {
         const card = document.createElement("div");
         card.className = "split-page-card";
         card.dataset.pageNum = page.page_num;
 
-        const isSelected = splitSessionData.selectedPages.has(page.page_num);
-        if (isSelected && splitSessionData.mode === "extract") {
+        const isSelected = State.splitSessionData.selectedPages.has(page.page_num);
+        if (isSelected && State.splitSessionData.mode === "extract") {
             card.classList.add("selected");
         }
 
         card.innerHTML = `
-            <div class="split-checkbox-container ${splitSessionData.mode === "parts" ? "hidden" : ""}">
+            <div class="split-checkbox-container ${State.splitSessionData.mode === "parts" ? "hidden" : ""}">
                 <input type="checkbox" class="split-page-checkbox" ${isSelected ? "checked" : ""}>
             </div>
             <div class="split-page-img-container">
@@ -1922,13 +1861,13 @@ function renderSplitThumbnails() {
         card.addEventListener("click", (e) => {
             if (e.target.classList.contains("split-page-checkbox")) return;
             
-            if (splitSessionData.mode === "extract") {
+            if (State.splitSessionData.mode === "extract") {
                 toggleSplitPageSelection(page.page_num);
             }
         });
 
         card.querySelector(".split-page-checkbox").addEventListener("change", (e) => {
-            if (splitSessionData.mode === "extract") {
+            if (State.splitSessionData.mode === "extract") {
                 toggleSplitPageSelection(page.page_num, e.target.checked);
             } else {
                 e.target.checked = !e.target.checked;
@@ -1938,11 +1877,11 @@ function renderSplitThumbnails() {
         splitThumbnailGrid.appendChild(card);
 
         // Render split gutter between items for visual cuts (only in parts mode)
-        if (splitSessionData.mode === "parts" && index < totalPages - 1) {
+        if (State.splitSessionData.mode === "parts" && index < totalPages - 1) {
             const gutter = document.createElement("div");
             gutter.className = "split-gutter";
             gutter.dataset.gutterIdx = index;
-            if (splitCutPoints.has(index)) {
+            if (State.splitCutPoints.has(index)) {
                 gutter.classList.add("active");
             }
 
@@ -1954,11 +1893,11 @@ function renderSplitThumbnails() {
             `;
 
             gutter.addEventListener("click", () => {
-                if (splitCutPoints.has(index)) {
-                    splitCutPoints.delete(index);
+                if (State.splitCutPoints.has(index)) {
+                    State.splitCutPoints.delete(index);
                     gutter.classList.remove("active");
                 } else {
-                    splitCutPoints.add(index);
+                    State.splitCutPoints.add(index);
                     gutter.classList.add("active");
                 }
                 updateInputFromCutPoints();
@@ -1974,24 +1913,24 @@ function toggleSplitPageSelection(pageNum, forceState = null) {
     if (!card) return;
     const checkbox = card.querySelector(".split-page-checkbox");
     
-    let shouldSelect = forceState !== null ? forceState : !splitSessionData.selectedPages.has(pageNum);
+    let shouldSelect = forceState !== null ? forceState : !State.splitSessionData.selectedPages.has(pageNum);
     
     if (shouldSelect) {
-        splitSessionData.selectedPages.add(pageNum);
+        State.splitSessionData.selectedPages.add(pageNum);
         card.classList.add("selected");
         if (checkbox) checkbox.checked = true;
     } else {
-        splitSessionData.selectedPages.delete(pageNum);
+        State.splitSessionData.selectedPages.delete(pageNum);
         card.classList.remove("selected");
         if (checkbox) checkbox.checked = false;
     }
 
-    splitTargetCountVal.innerText = `${splitSessionData.selectedPages.size} selected`;
+    splitTargetCountVal.innerText = `${State.splitSessionData.selectedPages.size} selected`;
 }
 
 function switchSplitMode(mode) {
-    if (splitSessionData.mode === mode) return;
-    splitSessionData.mode = mode;
+    if (State.splitSessionData.mode === mode) return;
+    State.splitSessionData.mode = mode;
 
     if (mode === "extract") {
         splitModeExtractBtn.classList.add("active");
@@ -2001,10 +1940,10 @@ function switchSplitMode(mode) {
         splitGuideTitle.innerHTML = `<i class="fa-solid fa-circle-info"></i> How to Extract`;
         splitGuideText.innerText = "Check the checkbox on the top-right corner of each page preview you wish to extract. Only checked pages will be combined into your new PDF.";
 
-        splitCutPoints.clear();
+        State.splitCutPoints.clear();
         splitPartsInput.value = "";
         renderSplitThumbnails();
-        splitTargetCountVal.innerText = `${splitSessionData.selectedPages.size} selected`;
+        splitTargetCountVal.innerText = `${State.splitSessionData.selectedPages.size} selected`;
     } else {
         splitModeExtractBtn.classList.remove("active");
         splitModePartsBtn.classList.add("active");
@@ -2013,7 +1952,7 @@ function switchSplitMode(mode) {
         splitGuideTitle.innerHTML = `<i class="fa-solid fa-scissors"></i> Visual Range Groups`;
         splitGuideText.innerText = "Click between pages to split, or enter page ranges manually (e.g. 1-2, 3-5). Page groups will color-code themselves.";
 
-        splitSessionData.selectedPages.clear();
+        State.splitSessionData.selectedPages.clear();
         renderSplitThumbnails();
         handleSplitPartsInputChange(true);
     }
@@ -2021,14 +1960,14 @@ function switchSplitMode(mode) {
 
 // Bidirectional Sync helper: CutPoints -> Input Field
 function updateInputFromCutPoints() {
-    const totalPages = splitSessionData.totalPages;
+    const totalPages = State.splitSessionData.totalPages;
     if (totalPages <= 0) return;
     
     const ranges = [];
     let startPage = 1;
     
     for (let i = 0; i < totalPages - 1; i++) {
-        if (splitCutPoints.has(i)) {
+        if (State.splitCutPoints.has(i)) {
             const endPage = i + 1;
             if (startPage === endPage) {
                 ranges.push(`${startPage}`);
@@ -2052,7 +1991,7 @@ function updateInputFromCutPoints() {
 
 // Bidirectional Sync helper: Input Field -> CutPoints Set
 function updateCutPointsFromInput() {
-    splitCutPoints.clear();
+    State.splitCutPoints.clear();
     const val = splitPartsInput.value.trim();
     if (!val) {
         // Sync active state of gutters visually
@@ -2077,15 +2016,15 @@ function updateCutPointsFromInput() {
     
     for (let i = 0; i < ranges.length - 1; i++) {
         const cutPoint = ranges[i].end - 1;
-        if (cutPoint >= 0 && cutPoint < splitSessionData.totalPages - 1) {
-            splitCutPoints.add(cutPoint);
+        if (cutPoint >= 0 && cutPoint < State.splitSessionData.totalPages - 1) {
+            State.splitCutPoints.add(cutPoint);
         }
     }
     
     // Update visual active class on gutters
     document.querySelectorAll(".split-gutter").forEach(gutter => {
         const idx = parseInt(gutter.dataset.gutterIdx);
-        if (splitCutPoints.has(idx)) {
+        if (State.splitCutPoints.has(idx)) {
             gutter.classList.add("active");
         } else {
             gutter.classList.remove("active");
@@ -2094,14 +2033,14 @@ function updateCutPointsFromInput() {
 }
 
 function handleSplitPartsInputChange(syncCutPoints = true) {
-    if (splitSessionData.mode !== "parts") return;
+    if (State.splitSessionData.mode !== "parts") return;
     
     if (syncCutPoints) {
         updateCutPointsFromInput();
     }
     
     const val = splitPartsInput.value.trim();
-    const totalPages = splitSessionData.totalPages;
+    const totalPages = State.splitSessionData.totalPages;
 
     document.querySelectorAll(".split-page-card").forEach(card => {
         card.className = "split-page-card";
@@ -2154,40 +2093,22 @@ function handleSplitPartsInputChange(syncCutPoints = true) {
 }
 
 function runSplit() {
-    if (!splitSessionData.sessionId) return;
+    if (!State.splitSessionData.sessionId) return;
 
-    if (splitSessionData.mode === "extract") {
-        if (splitSessionData.selectedPages.size === 0) {
+    if (State.splitSessionData.mode === "extract") {
+        if (State.splitSessionData.selectedPages.size === 0) {
             alert("Please select at least one page to extract.");
             return;
         }
 
         showLoading(true, "Extracting pages...", 40);
 
-        const pages = Array.from(splitSessionData.selectedPages).sort((a, b) => a - b);
+        const pages = Array.from(State.splitSessionData.selectedPages).sort((a, b) => a - b);
 
-        fetch("/api/split/extract", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                session_id: splitSessionData.sessionId,
-                pages: pages
-            })
-        })
-        .then(res => {
-            if (!res.ok) {
-                return res.json().then(err => { throw new Error(err.detail || "Extraction failed") });
-            }
-            return res.json();
-        })
+        apiSplitExtract(State.splitSessionData.sessionId, pages)
         .then(data => {
             updateProgress(80);
-            const link = document.createElement("a");
-            link.href = data.download_url;
-            link.download = `extracted_${splitSessionData.filename}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            triggerFileDownload(data.download_url, `extracted_${State.splitSessionData.filename}`);
 
             updateProgress(100);
             setTimeout(() => {
@@ -2218,7 +2139,7 @@ function runSplit() {
                 
                 const indices = [];
                 for (let i = start; i <= end; i++) {
-                    if (i >= 1 && i <= splitSessionData.totalPages) {
+                    if (i >= 1 && i <= State.splitSessionData.totalPages) {
                         indices.push(i - 1);
                     }
                 }
@@ -2235,28 +2156,10 @@ function runSplit() {
 
         showLoading(true, "Splitting PDF into parts...", 40);
 
-        fetch("/api/split/parts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                session_id: splitSessionData.sessionId,
-                parts: parts
-            })
-        })
-        .then(res => {
-            if (!res.ok) {
-                return res.json().then(err => { throw new Error(err.detail || "Splitting failed") });
-            }
-            return res.json();
-        })
+        apiSplitParts(State.splitSessionData.sessionId, parts)
         .then(data => {
             updateProgress(80);
-            const link = document.createElement("a");
-            link.href = data.download_url;
-            link.download = `split_${splitSessionData.filename.replace(".pdf", "")}.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            triggerFileDownload(data.download_url, `split_${State.splitSessionData.filename.replace(".pdf", "")}.zip`);
 
             updateProgress(100);
             setTimeout(() => {
@@ -2273,19 +2176,19 @@ function runSplit() {
 }
 
 function clearSplitState() {
-    if (splitSessionData.mode === "extract") {
-        splitSessionData.selectedPages.clear();
+    if (State.splitSessionData.mode === "extract") {
+        State.splitSessionData.selectedPages.clear();
         renderSplitThumbnails();
         splitTargetCountVal.innerText = "0 selected";
     } else {
-        splitCutPoints.clear();
+        State.splitCutPoints.clear();
         splitPartsInput.value = "";
         handleSplitPartsInputChange(false);
     }
 }
 
 function closeSplitWorkspace() {
-    splitSessionData = {
+    State.splitSessionData = {
         sessionId: null,
         filename: "",
         totalPages: 0,
@@ -2293,7 +2196,7 @@ function closeSplitWorkspace() {
         selectedPages: new Set(),
         mode: "extract"
     };
-    splitCutPoints.clear();
+    State.splitCutPoints.clear();
 
     if (splitFileInput) splitFileInput.value = "";
     splitThumbnailGrid.innerHTML = "";
@@ -2327,18 +2230,9 @@ function uploadSecurityFile(file) {
     const formData = new FormData();
     formData.append("file", file);
     
-    fetch("/api/security/upload", {
-        method: "POST",
-        body: formData
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Upload failed"); });
-        }
-        return resp.json();
-    })
+    apiSecurityUpload(file)
     .then(data => {
-        securitySessionData = {
+        State.securitySessionData = {
             sessionId: data.session_id,
             filename: data.filename,
             fileSize: data.file_size,
@@ -2356,21 +2250,24 @@ function uploadSecurityFile(file) {
 }
 
 function renderSecurityWorkspace() {
-    if (securityFileNameDisplay) securityFileNameDisplay.innerText = securitySessionData.filename;
+    if (securityFileNameDisplay) {
+        securityFileNameDisplay.innerText = State.securitySessionData.filename;
+        securityFileNameDisplay.title = State.securitySessionData.filename;
+    }
     
     let sizeText = "";
-    if (securitySessionData.fileSize > 1024 * 1024) {
-        sizeText = (securitySessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+    if (State.securitySessionData.fileSize > 1024 * 1024) {
+        sizeText = (State.securitySessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
     } else {
-        sizeText = (securitySessionData.fileSize / 1024).toFixed(1) + " KB";
+        sizeText = (State.securitySessionData.fileSize / 1024).toFixed(1) + " KB";
     }
     if (securityFileSizeDisplay) securityFileSizeDisplay.innerText = sizeText;
     
     if (securityPageCountDisplay) {
-        securityPageCountDisplay.innerText = securitySessionData.totalPages + (securitySessionData.totalPages === 1 ? " page" : " pages");
+        securityPageCountDisplay.innerText = State.securitySessionData.totalPages + (State.securitySessionData.totalPages === 1 ? " page" : " pages");
     }
     
-    if (securitySessionData.isEncrypted) {
+    if (State.securitySessionData.isEncrypted) {
         if (securityUnlockOverlay) securityUnlockOverlay.classList.remove("hidden");
         if (securityProtectOptions) securityProtectOptions.classList.add("hidden");
         if (securityUnlockPasswordInput) {
@@ -2414,26 +2311,11 @@ function runUnlock() {
     
     showLoading(true, "Authenticating and unlocking PDF...", 50);
     
-    fetch("/api/security/unlock", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            session_id: securitySessionData.sessionId,
-            password: password
-        })
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Incorrect password"); });
-        }
-        return resp.json();
-    })
+    apiSecurityUnlock(State.securitySessionData.sessionId, password)
     .then(data => {
         showLoading(false);
         // Direct download of decrypted PDF
-        triggerFileDownload(data.download_url, `unlocked_${securitySessionData.filename || "document.pdf"}`);
+        triggerFileDownload(data.download_url, `unlocked_${State.securitySessionData.filename || "document.pdf"}`);
         
         // Prompt success and return to dashboard
         setTimeout(() => {
@@ -2463,30 +2345,17 @@ function runProtect() {
     
     showLoading(true, "Securing document layers...", 60);
     
-    fetch("/api/security/protect", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            session_id: securitySessionData.sessionId,
-            user_password: userPassword,
-            owner_password: ownerPassword,
-            prevent_print: preventPrintToggle.checked,
-            prevent_copy: preventCopyToggle.checked,
-            prevent_modify: preventModifyToggle.checked
-        })
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Protection failed"); });
-        }
-        return resp.json();
+    apiSecurityProtect(State.securitySessionData.sessionId, {
+        user_password: userPassword,
+        owner_password: ownerPassword,
+        prevent_print: preventPrintToggle.checked,
+        prevent_copy: preventCopyToggle.checked,
+        prevent_modify: preventModifyToggle.checked
     })
     .then(data => {
         showLoading(false);
         // Direct download of protected PDF
-        triggerFileDownload(data.download_url, `protected_${securitySessionData.filename || "document.pdf"}`);
+        triggerFileDownload(data.download_url, `protected_${State.securitySessionData.filename || "document.pdf"}`);
         
         setTimeout(() => {
             alert("Document secured successfully! Encrypted version downloaded.");
@@ -2500,7 +2369,7 @@ function runProtect() {
 }
 
 function closeSecurityWorkspace() {
-    securitySessionData = {
+    State.securitySessionData = {
         sessionId: null,
         filename: "",
         fileSize: 0,
@@ -2517,101 +2386,17 @@ function closeSecurityWorkspace() {
     if (securityUploadCard) securityUploadCard.classList.remove("hidden");
 }
 
-function saveAllStates() {
-    let activeMode = "dashboard";
-    if (securitySection && !securitySection.classList.contains("hidden")) activeMode = "security";
-    else if (workspaceSection && !workspaceSection.classList.contains("hidden")) activeMode = "sanitize";
-    else if (uploadSection && !uploadSection.classList.contains("hidden")) activeMode = "sanitize";
-    else if (document.getElementById("mergeSection") && !document.getElementById("mergeSection").classList.contains("hidden")) activeMode = "merge";
-    else if (document.getElementById("splitSection") && !document.getElementById("splitSection").classList.contains("hidden")) activeMode = "split";
-    else if (compressSection && !compressSection.classList.contains("hidden")) activeMode = "compress";
-    else if (organizeSection && !organizeSection.classList.contains("hidden")) activeMode = "organize";
-
-    const state = {
-        activeMode: activeMode,
-        sessionData: sessionData,
-        redactedFindingIds: Array.from(redactedFindingIds),
-        manualRedactions: manualRedactions,
-        mergeSessionData: mergeSessionData,
-        splitSessionData: {
-            ...splitSessionData,
-            selectedPages: Array.from(splitSessionData.selectedPages)
-        },
-        splitCutPoints: Array.from(splitCutPoints),
-        securitySessionData: securitySessionData,
-        compressSessionData: compressSessionData,
-        organizeSessionData: organizeSessionData
-    };
-    sessionStorage.setItem("secure_redact_state", JSON.stringify(state));
-}
-
-function restoreAllStates(state) {
-    if (!state) return;
-    
-    // Restore Sanitize
-    if (state.sessionData && state.sessionData.sessionId) {
-        sessionData = state.sessionData;
-        redactedFindingIds = new Set(state.redactedFindingIds || []);
-        manualRedactions = state.manualRedactions || [];
-        
-        fileNameDisplay.innerText = sessionData.filename;
-        if (propFileName) propFileName.innerText = sessionData.filename;
-        if (propPageCount) propPageCount.innerText = sessionData.totalPages;
-        if (totalPagesNum) totalPagesNum.innerText = sessionData.totalPages;
-        if (currentPageNum) currentPageNum.innerText = "1";
-        if (zoomDisplay) zoomDisplay.innerText = "100%";
-        zoomLevel = 1.0;
-        
-        renderFindingsList();
-        renderPDF();
-        renderThumbnails();
-        updateRedactionCount();
-        
-        if (workspaceSection) workspaceSection.classList.remove("hidden");
-        if (uploadSection) uploadSection.classList.add("hidden");
-    }
-    
-    // Restore Merge
-    if (state.mergeSessionData && state.mergeSessionData.sessionId) {
-        mergeSessionData = state.mergeSessionData;
-    }
-    
-    // Restore Split
-    if (state.splitSessionData && state.splitSessionData.sessionId) {
-        splitSessionData = {
-            ...state.splitSessionData,
-            selectedPages: new Set(state.splitSessionData.selectedPages || [])
-        };
-        splitCutPoints = new Set(state.splitCutPoints || []);
-    }
-    
-    // Restore Security
-    if (state.securitySessionData && state.securitySessionData.sessionId) {
-        securitySessionData = state.securitySessionData;
-    }
-    
-    // Restore Compress
-    if (state.compressSessionData && state.compressSessionData.sessionId) {
-        compressSessionData = state.compressSessionData;
-    }
-    
-    // Restore Organize
-    if (state.organizeSessionData && state.organizeSessionData.sessionId) {
-        organizeSessionData = state.organizeSessionData;
-    }
-    
-    if (state.activeMode && state.activeMode !== "dashboard") {
-        switchAppMode(state.activeMode);
-    }
-}
-
 window.addEventListener("beforeunload", (e) => {
-    const isSessionActive = sessionData.sessionId || 
-                            (mergeSessionData.files && mergeSessionData.files.length > 0) || 
-                            splitSessionData.sessionId || 
-                            securitySessionData.sessionId ||
-                            compressSessionData.sessionId ||
-                            organizeSessionData.sessionId;
+    const isSessionActive = State.sessionData.sessionId || 
+                            (State.mergeSessionData.files && State.mergeSessionData.files.length > 0) || 
+                            State.splitSessionData.sessionId || 
+                            State.securitySessionData.sessionId ||
+                            State.compressSessionData.sessionId ||
+                            State.organizeSessionData.sessionId ||
+                            State.watermarkSessionData.sessionId ||
+                            State.convertSessionData.pdfSessionId ||
+                            State.convertSessionData.imgSessionId ||
+                            (State.convertSessionData.imgFiles && State.convertSessionData.imgFiles.length > 0);
                             
     if (isSessionActive) {
         saveAllStates();
@@ -2624,18 +2409,42 @@ window.addEventListener("beforeunload", (e) => {
 
 // Helper functions for secure downloads and server cleanup
 function triggerFileDownload(url, filename) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    console.log(`Starting secure download from ${url} as ${filename}`);
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to fetch file: ${response.statusText}`);
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Revoke the Object URL after a short timeout so the browser has time to start the download
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+            }, 1000);
+        })
+        .catch(err => {
+            console.error("Secure blob download failed, falling back to direct download:", err);
+            // Fallback to direct download link click in case of network issue
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
 }
 
 function cleanupSessionOnServer(sessionId) {
-    if (!sessionId) return;
-    fetch(`/api/cleanup/${sessionId}`, { method: "POST", keepalive: true })
-    .catch(err => console.error("Session cleanup failed:", err));
+    apiCleanupSession(sessionId);
 }
 
 // Compress PDF Tool Handlers
@@ -2664,18 +2473,9 @@ function uploadCompressFile(file) {
     const formData = new FormData();
     formData.append("file", file);
     
-    fetch("/api/compress/upload", {
-        method: "POST",
-        body: formData
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Upload failed"); });
-        }
-        return resp.json();
-    })
+    apiCompressUpload(file)
     .then(data => {
-        compressSessionData = {
+        State.compressSessionData = {
             sessionId: data.session_id,
             filename: data.filename,
             fileSize: data.file_size,
@@ -2703,13 +2503,16 @@ function uploadCompressFile(file) {
 }
 
 function renderCompressWorkspace() {
-    if (compressFileNameDisplay) compressFileNameDisplay.innerText = compressSessionData.filename;
+    if (compressFileNameDisplay) {
+        compressFileNameDisplay.innerText = State.compressSessionData.filename;
+        compressFileNameDisplay.title = State.compressSessionData.filename;
+    }
     
     let sizeText = "";
-    if (compressSessionData.fileSize > 1024 * 1024) {
-        sizeText = (compressSessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
+    if (State.compressSessionData.fileSize > 1024 * 1024) {
+        sizeText = (State.compressSessionData.fileSize / (1024 * 1024)).toFixed(2) + " MB";
     } else {
-        sizeText = (compressSessionData.fileSize / 1024).toFixed(1) + " KB";
+        sizeText = (State.compressSessionData.fileSize / 1024).toFixed(1) + " KB";
     }
     if (compressFileSizeDisplay) compressFileSizeDisplay.innerText = sizeText;
     
@@ -2720,7 +2523,7 @@ function renderCompressWorkspace() {
     // Ensure segment buttons reflect correct state (e.g. from restored state)
     const segmentBtns = document.querySelectorAll("#compressSection .segment-btn");
     segmentBtns.forEach(btn => {
-        if (btn.dataset.level === compressSessionData.level) {
+        if (btn.dataset.level === State.compressSessionData.level) {
             btn.classList.add("active");
         } else {
             btn.classList.remove("active");
@@ -2729,26 +2532,11 @@ function renderCompressWorkspace() {
 }
 
 function runCompress() {
-    if (!compressSessionData.sessionId) return;
+    if (!State.compressSessionData.sessionId) return;
     
     showLoading(true, "Compressing document...", 40);
     
-    fetch("/api/compress/execute", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            session_id: compressSessionData.sessionId,
-            level: compressSessionData.level
-        })
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Compression failed"); });
-        }
-        return resp.json();
-    })
+    apiCompressExecute(State.compressSessionData.sessionId, State.compressSessionData.level)
     .then(data => {
         showLoading(false);
         
@@ -2808,11 +2596,11 @@ function runCompress() {
 }
 
 function closeCompressWorkspace() {
-    if (compressSessionData.sessionId) {
-        cleanupSessionOnServer(compressSessionData.sessionId);
+    if (State.compressSessionData.sessionId) {
+        cleanupSessionOnServer(State.compressSessionData.sessionId);
     }
 
-    compressSessionData = {
+    State.compressSessionData = {
         sessionId: null,
         filename: "",
         fileSize: 0,
@@ -2858,16 +2646,7 @@ function uploadOrganizeFile(file) {
     const formData = new FormData();
     formData.append("file", file);
     
-    fetch("/api/organize/upload", {
-        method: "POST",
-        body: formData
-    })
-    .then(res => {
-        if (!res.ok) {
-            return res.json().then(err => { throw new Error(err.detail || "Upload failed"); });
-        }
-        return res.json();
-    })
+    apiOrganizeUpload(file)
     .then(data => {
         showLoading(false);
         initializeOrganizeWorkspace(data);
@@ -2880,7 +2659,7 @@ function uploadOrganizeFile(file) {
 }
 
 function initializeOrganizeWorkspace(data) {
-    organizeSessionData = {
+    State.organizeSessionData = {
         sessionId: data.session_id,
         filename: data.filename,
         totalPages: data.total_pages,
@@ -2891,7 +2670,10 @@ function initializeOrganizeWorkspace(data) {
         }))
     };
     
-    if (organizeFileNameDisplay) organizeFileNameDisplay.innerText = organizeSessionData.filename;
+    if (organizeFileNameDisplay) {
+        organizeFileNameDisplay.innerText = State.organizeSessionData.filename;
+        organizeFileNameDisplay.title = State.organizeSessionData.filename;
+    }
     
     renderOrganizeWorkspace();
     
@@ -2903,47 +2685,85 @@ function renderOrganizeWorkspace() {
     if (!organizeThumbnailGrid) return;
     organizeThumbnailGrid.innerHTML = "";
     
-    organizeSessionData.pages.forEach(page => {
+    State.organizeSessionData.pages.forEach((page, index) => {
         const card = document.createElement("div");
         card.className = "organize-page-card";
-        card.dataset.pageNum = page.page_num;
+        card.setAttribute("draggable", "true");
         
         if (page.deleted) {
             card.classList.add("deleted");
         }
         
+        let previewHtml = '';
+        if (page.is_blank) {
+            previewHtml = `
+                <div class="organize-blank-page-placeholder" style="transform: rotate(${page.rotation || 0}deg);">
+                    <i class="fa-solid fa-file"></i>
+                    <span>Blank Page</span>
+                </div>
+            `;
+        } else {
+            previewHtml = `
+                <img src="${page.image_url}" class="organize-page-img" alt="Page ${index + 1}" style="transform: rotate(${page.rotation || 0}deg);">
+            `;
+        }
+        
         card.innerHTML = `
             <div class="organize-page-img-container">
-                <img src="${page.image_url}" class="organize-page-img" alt="Page ${page.page_num + 1}" style="transform: rotate(${page.rotation || 0}deg);">
+                ${previewHtml}
                 <div class="organize-page-controls">
+                    <button class="organize-control-btn shift-left" title="Move Left" ${index === 0 ? 'disabled style="opacity: 0.3; pointer-events: none;"' : ''}>
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <button class="organize-control-btn shift-right" title="Move Right" ${index === State.organizeSessionData.pages.length - 1 ? 'disabled style="opacity: 0.3; pointer-events: none;"' : ''}>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
                     <button class="organize-control-btn rotate-ccw" title="Rotate Counter-Clockwise">
                         <i class="fa-solid fa-rotate-left"></i>
                     </button>
                     <button class="organize-control-btn rotate-cw" title="Rotate Clockwise">
                         <i class="fa-solid fa-rotate-right"></i>
                     </button>
+                    <button class="organize-control-btn duplicate-page" title="Duplicate Page">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
                     <button class="organize-control-btn delete-page" title="Delete Page">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
             </div>
-            <span class="organize-page-number">Page ${page.page_num + 1}</span>
+            <span class="organize-page-number">Page ${index + 1}${page.is_blank ? ' (Blank)' : ` (Orig. ${page.page_num + 1})`}</span>
         `;
         
         // Add event listeners inside the controls
+        card.querySelector(".shift-left").addEventListener("click", (e) => {
+            e.stopPropagation();
+            shiftOrganizePage(index, "left");
+        });
+        
+        card.querySelector(".shift-right").addEventListener("click", (e) => {
+            e.stopPropagation();
+            shiftOrganizePage(index, "right");
+        });
+        
         card.querySelector(".rotate-ccw").addEventListener("click", (e) => {
             e.stopPropagation();
-            toggleOrganizePageRotation(page.page_num, "ccw");
+            toggleOrganizePageRotation(index, "ccw");
         });
         
         card.querySelector(".rotate-cw").addEventListener("click", (e) => {
             e.stopPropagation();
-            toggleOrganizePageRotation(page.page_num, "cw");
+            toggleOrganizePageRotation(index, "cw");
+        });
+        
+        card.querySelector(".duplicate-page").addEventListener("click", (e) => {
+            e.stopPropagation();
+            duplicateOrganizePage(index);
         });
         
         card.querySelector(".delete-page").addEventListener("click", (e) => {
             e.stopPropagation();
-            toggleOrganizePageDeletion(page.page_num, true);
+            toggleOrganizePageDeletion(index, true);
         });
         
         if (page.deleted) {
@@ -2956,19 +2776,63 @@ function renderOrganizeWorkspace() {
             `;
             overlay.querySelector(".restore-page-btn").addEventListener("click", (e) => {
                 e.stopPropagation();
-                toggleOrganizePageDeletion(page.page_num, false);
+                toggleOrganizePageDeletion(index, false);
             });
             card.appendChild(overlay);
         }
         
+        // Native HTML5 Drag and Drop event listeners
+        card.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", index);
+            card.classList.add("dragging");
+        });
+        
+        card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            card.classList.add("drag-over");
+        });
+        
+        card.addEventListener("dragleave", () => {
+            card.classList.remove("drag-over");
+        });
+        
+        card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            card.classList.remove("drag-over");
+            const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+            const toIndex = index;
+            if (!isNaN(fromIndex) && fromIndex !== toIndex) {
+                const movedPage = State.organizeSessionData.pages.splice(fromIndex, 1)[0];
+                State.organizeSessionData.pages.splice(toIndex, 0, movedPage);
+                renderOrganizeWorkspace();
+                saveAllStates();
+            }
+        });
+        
+        card.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+        });
+        
         organizeThumbnailGrid.appendChild(card);
     });
+    
+    // Append the "+" card at the end of the grid
+    const addCard = document.createElement("div");
+    addCard.className = "organize-add-card";
+    addCard.innerHTML = `
+        <i class="fa-solid fa-circle-plus"></i>
+        <span>Add Blank Page</span>
+    `;
+    addCard.addEventListener("click", () => {
+        addOrganizeBlankPage();
+    });
+    organizeThumbnailGrid.appendChild(addCard);
     
     updateOrganizeSummary();
 }
 
-function toggleOrganizePageRotation(pageNum, direction) {
-    const page = organizeSessionData.pages.find(p => p.page_num === pageNum);
+function toggleOrganizePageRotation(index, direction) {
+    const page = State.organizeSessionData.pages[index];
     if (!page) return;
     
     if (direction === "cw") {
@@ -2978,60 +2842,70 @@ function toggleOrganizePageRotation(pageNum, direction) {
         if (page.rotation < 0) page.rotation += 360;
     }
     
-    const card = document.querySelector(`.organize-page-card[data-page-num="${pageNum}"]`);
-    if (card) {
-        const img = card.querySelector(".organize-page-img");
-        if (img) {
-            img.style.transform = `rotate(${page.rotation}deg)`;
-        }
-    }
-    
-    updateOrganizeSummary();
+    renderOrganizeWorkspace();
     saveAllStates();
 }
 
-function toggleOrganizePageDeletion(pageNum, isDeleted) {
-    const page = organizeSessionData.pages.find(p => p.page_num === pageNum);
+function toggleOrganizePageDeletion(index, isDeleted) {
+    const page = State.organizeSessionData.pages[index];
     if (!page) return;
     
     page.deleted = isDeleted;
     
-    const card = document.querySelector(`.organize-page-card[data-page-num="${pageNum}"]`);
-    if (card) {
-        if (isDeleted) {
-            card.classList.add("deleted");
-            let overlay = card.querySelector(".organize-page-deleted-overlay");
-            if (!overlay) {
-                overlay = document.createElement("div");
-                overlay.className = "organize-page-deleted-overlay";
-                overlay.innerHTML = `
-                    <i class="fa-solid fa-trash-can"></i>
-                    <span>Page Deleted</span>
-                    <button class="restore-page-btn">Restore Page</button>
-                `;
-                overlay.querySelector(".restore-page-btn").addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    toggleOrganizePageDeletion(pageNum, false);
-                });
-                card.appendChild(overlay);
-            }
-        } else {
-            card.classList.remove("deleted");
-            const overlay = card.querySelector(".organize-page-deleted-overlay");
-            if (overlay) overlay.remove();
-        }
+    renderOrganizeWorkspace();
+    saveAllStates();
+}
+
+function shiftOrganizePage(index, direction) {
+    const pages = State.organizeSessionData.pages;
+    if (direction === "left" && index > 0) {
+        const temp = pages[index];
+        pages[index] = pages[index - 1];
+        pages[index - 1] = temp;
+    } else if (direction === "right" && index < pages.length - 1) {
+        const temp = pages[index];
+        pages[index] = pages[index + 1];
+        pages[index + 1] = temp;
     }
+    renderOrganizeWorkspace();
+    saveAllStates();
+}
+
+function duplicateOrganizePage(index) {
+    const pageToDuplicate = State.organizeSessionData.pages[index];
+    if (!pageToDuplicate) return;
     
-    updateOrganizeSummary();
+    const duplicateItem = {
+        ...pageToDuplicate,
+        deleted: false
+    };
+    
+    State.organizeSessionData.pages.splice(index + 1, 0, duplicateItem);
+    renderOrganizeWorkspace();
+    saveAllStates();
+}
+
+function addOrganizeBlankPage() {
+    if (!State.organizeSessionData.sessionId) return;
+    
+    const blankItem = {
+        page_num: -1,
+        is_blank: true,
+        rotation: 0,
+        deleted: false
+    };
+    
+    State.organizeSessionData.pages.push(blankItem);
+    renderOrganizeWorkspace();
     saveAllStates();
 }
 
 function updateOrganizeSummary() {
-    if (!organizeSessionData.sessionId) return;
+    if (!State.organizeSessionData.sessionId) return;
     
-    const total = organizeSessionData.totalPages;
-    const deletedCount = organizeSessionData.pages.filter(p => p.deleted).length;
-    const rotatedCount = organizeSessionData.pages.filter(p => !p.deleted && p.rotation !== 0).length;
+    const total = State.organizeSessionData.pages.length;
+    const deletedCount = State.organizeSessionData.pages.filter(p => p.deleted).length;
+    const rotatedCount = State.organizeSessionData.pages.filter(p => !p.deleted && p.rotation !== 0).length;
     
     if (organizeTotalPagesVal) organizeTotalPagesVal.innerText = total;
     if (organizeDeleteCountVal) organizeDeleteCountVal.innerText = `${deletedCount} deleted`;
@@ -3045,9 +2919,9 @@ function updateOrganizeSummary() {
 }
 
 function runOrganize() {
-    if (!organizeSessionData.sessionId) return;
+    if (!State.organizeSessionData.sessionId) return;
     
-    const remainingPages = organizeSessionData.pages.filter(p => !p.deleted);
+    const remainingPages = State.organizeSessionData.pages.filter(p => !p.deleted);
     if (remainingPages.length === 0) {
         alert("Cannot organize a document with all pages deleted.");
         return;
@@ -3056,29 +2930,18 @@ function runOrganize() {
     showLoading(true, "Applying changes and compiling PDF...", 40);
     
     const payload = {
-        session_id: organizeSessionData.sessionId,
+        session_id: State.organizeSessionData.sessionId,
         pages: remainingPages.map(p => ({
             page_num: p.page_num,
-            rotation: p.rotation
+            rotation: p.rotation,
+            is_blank: p.is_blank || false
         }))
     };
     
-    fetch("/api/organize/execute", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(resp => {
-        if (!resp.ok) {
-            return resp.json().then(err => { throw new Error(err.detail || "Organization failed"); });
-        }
-        return resp.json();
-    })
+    apiOrganizeExecute(State.organizeSessionData.sessionId, payload.pages)
     .then(data => {
         showLoading(false);
-        triggerFileDownload(data.download_url, `organized_${organizeSessionData.filename || "document.pdf"}`);
+        triggerFileDownload(data.download_url, `organized_${State.organizeSessionData.filename || "document.pdf"}`);
         
         setTimeout(() => {
             alert("Changes applied successfully! Your organized PDF has been downloaded.");
@@ -3092,24 +2955,33 @@ function runOrganize() {
 }
 
 function clearOrganizeState() {
-    if (!organizeSessionData.sessionId) return;
+    if (!State.organizeSessionData.sessionId) return;
     
-    if (confirm("Are you sure you want to reset all rotations and deletions?")) {
-        organizeSessionData.pages.forEach(p => {
-            p.rotation = 0;
-            p.deleted = false;
-        });
+    if (confirm("Are you sure you want to reset all rotations, reorderings, duplications, and blank pages?")) {
+        const originalPages = [];
+        for (let i = 0; i < State.organizeSessionData.totalPages; i++) {
+            originalPages.push({
+                page_num: i,
+                width: 612,
+                height: 792,
+                image_url: `/api/organize/page/${State.organizeSessionData.sessionId}/${i}`,
+                rotation: 0,
+                deleted: false,
+                is_blank: false
+            });
+        }
+        State.organizeSessionData.pages = originalPages;
         renderOrganizeWorkspace();
         saveAllStates();
     }
 }
 
 function closeOrganizeWorkspace() {
-    if (organizeSessionData.sessionId) {
-        cleanupSessionOnServer(organizeSessionData.sessionId);
+    if (State.organizeSessionData.sessionId) {
+        cleanupSessionOnServer(State.organizeSessionData.sessionId);
     }
     
-    organizeSessionData = {
+    State.organizeSessionData = {
         sessionId: null,
         filename: "",
         totalPages: 0,
@@ -3125,4 +2997,831 @@ function closeOrganizeWorkspace() {
     saveAllStates();
 }
 
+// Watermark PDF Tool Handlers
+function handleWatermarkFileSelect(e) {
+    if (watermarkFileInput.files.length > 0) {
+        uploadWatermarkFile(watermarkFileInput.files[0]);
+    }
+}
 
+function handleWatermarkFileDrop(e) {
+    e.preventDefault();
+    watermarkDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadWatermarkFile(e.dataTransfer.files[0]);
+    }
+}
+
+function uploadWatermarkFile(file) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+        alert("Please upload a PDF file.");
+        return;
+    }
+    
+    showLoading(true, "Uploading and analyzing PDF...", 20);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    apiWatermarkUpload(file)
+    .then(data => {
+        showLoading(false);
+        initializeWatermarkWorkspace(data);
+    })
+    .catch(err => {
+        showLoading(false);
+        alert(err.message);
+        if (watermarkFileInput) watermarkFileInput.value = "";
+    });
+}
+
+function initializeWatermarkWorkspace(data) {
+    State.watermarkSessionData = {
+        sessionId: data.session_id,
+        filename: data.filename,
+        totalPages: data.total_pages,
+        pages: data.pages,
+        currentPage: 0,
+        type: "text",
+        text: "CONFIDENTIAL",
+        color: "#ef4444",
+        fontSize: 36,
+        rotation: 45,
+        scale: 0.3,
+        position: "center",
+        opacity: 0.3,
+        pagesMode: "all",
+        customPages: "",
+        logoUrl: null,
+        logoFile: null
+    };
+    
+    if (watermarkFileNameDisplay) {
+        watermarkFileNameDisplay.innerText = State.watermarkSessionData.filename;
+        watermarkFileNameDisplay.title = State.watermarkSessionData.filename;
+    }
+    
+    // Reset inputs visually
+    if (watermarkTextVal) watermarkTextVal.value = "CONFIDENTIAL";
+    if (watermarkTextColor) watermarkTextColor.value = "#ef4444";
+    if (watermarkTextColorHex) watermarkTextColorHex.innerText = "#EF4444";
+    if (watermarkTextFontSize) watermarkTextFontSize.value = 36;
+    if (watermarkTextFontSizeLabel) watermarkTextFontSizeLabel.innerText = "36px";
+    if (watermarkTextRotation) watermarkTextRotation.value = 45;
+    if (watermarkTextRotationLabel) watermarkTextRotationLabel.innerText = "45°";
+    if (watermarkImageScale) watermarkImageScale.value = 30;
+    if (watermarkImageScaleLabel) watermarkImageScaleLabel.innerText = "0.3";
+    if (watermarkOpacity) watermarkOpacity.value = 30;
+    if (watermarkOpacityLabel) watermarkOpacityLabel.innerText = "30%";
+    if (watermarkPosition) watermarkPosition.value = "center";
+    if (watermarkPagesMode) watermarkPagesMode.value = "all";
+    if (watermarkCustomPagesVal) watermarkCustomPagesVal.value = "";
+    if (watermarkCustomPagesGroup) watermarkCustomPagesGroup.classList.add("hidden");
+    if (watermarkLogoFileName) watermarkLogoFileName.innerText = "No file chosen";
+    
+    switchWatermarkType("text");
+    renderWatermarkWorkspace();
+    
+    if (watermarkUploadCard) watermarkUploadCard.classList.add("hidden");
+    if (watermarkWorkspaceContainer) watermarkWorkspaceContainer.classList.remove("hidden");
+}
+
+function switchWatermarkType(type) {
+    State.watermarkSessionData.type = type;
+    if (type === "text") {
+        if (watermarkTypeTextBtn) watermarkTypeTextBtn.classList.add("active");
+        if (watermarkTypeImageBtn) watermarkTypeImageBtn.classList.remove("active");
+        if (watermarkTextConfigGroup) watermarkTextConfigGroup.classList.remove("hidden");
+        if (watermarkImageConfigGroup) watermarkImageConfigGroup.classList.add("hidden");
+    } else {
+        if (watermarkTypeTextBtn) watermarkTypeTextBtn.classList.remove("active");
+        if (watermarkTypeImageBtn) watermarkTypeImageBtn.classList.add("active");
+        if (watermarkTextConfigGroup) watermarkTextConfigGroup.classList.add("hidden");
+        if (watermarkImageConfigGroup) watermarkImageConfigGroup.classList.remove("hidden");
+    }
+    updateWatermarkLivePreview();
+}
+
+function handleLogoSelect(e) {
+    if (watermarkLogoInput.files.length > 0) {
+        const file = watermarkLogoInput.files[0];
+        if (!file.type.startsWith("image/")) {
+            alert("Please select a valid image file.");
+            return;
+        }
+        
+        State.watermarkSessionData.logoFile = file;
+        if (watermarkLogoFileName) watermarkLogoFileName.innerText = file.name;
+        
+        // Revoke old object URL if exists
+        if (State.watermarkSessionData.logoUrl) {
+            URL.revokeObjectURL(State.watermarkSessionData.logoUrl);
+        }
+        State.watermarkSessionData.logoUrl = URL.createObjectURL(file);
+        
+        // Upload logo image to server
+        const formData = new FormData();
+        formData.append("session_id", State.watermarkSessionData.sessionId);
+        formData.append("file", file);
+        
+        apiWatermarkUploadLogo(State.watermarkSessionData.sessionId, file)
+        .then(data => {
+            console.log("Logo uploaded successfully");
+            updateWatermarkLivePreview();
+        })
+        .catch(err => {
+            alert("Failed to upload logo: " + err.message);
+        });
+    }
+}
+
+function renderWatermarkWorkspace() {
+    renderWatermarkPage();
+}
+
+function renderWatermarkPage() {
+    if (!State.watermarkSessionData.sessionId) return;
+    
+    const pageNum = State.watermarkSessionData.currentPage;
+    const page = State.watermarkSessionData.pages[pageNum];
+    
+    if (watermarkPreviewImage) watermarkPreviewImage.src = page.image_url;
+    if (watermarkCurrentPageNum) watermarkCurrentPageNum.innerText = pageNum + 1;
+    if (watermarkTotalPagesNum) watermarkTotalPagesNum.innerText = State.watermarkSessionData.totalPages;
+    
+    // Scale preview page card to preserve aspect ratio
+    if (watermarkPreviewPageCard) {
+        watermarkPreviewPageCard.style.aspectRatio = `${page.width} / ${page.height}`;
+    }
+    
+    updateWatermarkLivePreview();
+}
+
+function updateWatermarkLivePreview() {
+    if (!watermarkVisualOverlay) return;
+    
+    // Check if watermark is active on the current visible page
+    let shouldShow = true;
+    const curIdx = State.watermarkSessionData.currentPage;
+    
+    if (State.watermarkSessionData.pagesMode === "first" && curIdx !== 0) {
+        shouldShow = false;
+    } else if (State.watermarkSessionData.pagesMode === "custom" && State.watermarkSessionData.customPages) {
+        // Parse custom range
+        const activePages = [];
+        const parts = State.watermarkSessionData.customPages.split(",");
+        const total = State.watermarkSessionData.totalPages;
+        parts.forEach(part => {
+            part = part.trim();
+            if (part.includes("-")) {
+                const rng = part.split("-");
+                if (rng.length === 2) {
+                    const start = parseInt(rng[0]);
+                    const end = parseInt(rng[1]);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        const s = Math.max(1, Math.min(total, start)) - 1;
+                        const e = Math.max(1, Math.min(total, end)) - 1;
+                        const low = Math.min(s, e);
+                        const high = Math.max(s, e);
+                        for (let i = low; i <= high; i++) {
+                            activePages.push(i);
+                        }
+                    }
+                }
+            } else {
+                const idx = parseInt(part);
+                if (!isNaN(idx)) {
+                    activePages.push(idx - 1);
+                }
+            }
+        });
+        shouldShow = activePages.includes(curIdx);
+    }
+    
+    if (!shouldShow) {
+        watermarkVisualOverlay.innerHTML = "";
+        return;
+    }
+    
+    // Clear overlay
+    watermarkVisualOverlay.className = "watermark-visual-overlay";
+    watermarkVisualOverlay.innerHTML = "";
+    
+    if (State.watermarkSessionData.position === "tiled") {
+        watermarkVisualOverlay.classList.add("tiled-grid");
+        const tileCount = 9;
+        for (let i = 0; i < tileCount; i++) {
+            const item = createWatermarkVisualItem(true);
+            if (item) watermarkVisualOverlay.appendChild(item);
+        }
+    } else {
+        const item = createWatermarkVisualItem(false);
+        if (item) {
+            // Apply positioning
+            const pos = State.watermarkSessionData.position;
+            if (pos === "center") {
+                item.style.position = "absolute";
+                item.style.top = "50%";
+                item.style.left = "50%";
+                item.style.transform = `translate(-50%, -50%) rotate(${State.watermarkSessionData.rotation}deg)`;
+            } else if (pos === "top-left") {
+                item.style.position = "absolute";
+                item.style.top = "32px";
+                item.style.left = "32px";
+                item.style.transform = `rotate(${State.watermarkSessionData.rotation}deg)`;
+            } else if (pos === "top-right") {
+                item.style.position = "absolute";
+                item.style.top = "32px";
+                item.style.right = "32px";
+                item.style.transform = `rotate(${State.watermarkSessionData.rotation}deg)`;
+            } else if (pos === "bottom-left") {
+                item.style.position = "absolute";
+                item.style.bottom = "32px";
+                item.style.left = "32px";
+                item.style.transform = `rotate(${State.watermarkSessionData.rotation}deg)`;
+            } else if (pos === "bottom-right") {
+                item.style.position = "absolute";
+                item.style.bottom = "32px";
+                item.style.right = "32px";
+                item.style.transform = `rotate(${State.watermarkSessionData.rotation}deg)`;
+            }
+            watermarkVisualOverlay.appendChild(item);
+        }
+    }
+}
+
+function createWatermarkVisualItem(isTiled = false) {
+    if (State.watermarkSessionData.type === "text") {
+        const span = document.createElement("span");
+        span.className = "watermark-preview-item";
+        span.innerText = State.watermarkSessionData.text || "CONFIDENTIAL";
+        span.style.color = State.watermarkSessionData.color;
+        span.style.opacity = State.watermarkSessionData.opacity;
+        span.style.fontSize = `${State.watermarkSessionData.fontSize}px`;
+        if (isTiled) {
+            span.style.transform = `rotate(${State.watermarkSessionData.rotation}deg)`;
+        }
+        return span;
+    } else {
+        // Image logo type
+        if (!State.watermarkSessionData.logoUrl) {
+            const placeholder = document.createElement("div");
+            placeholder.style.color = "var(--text-muted)";
+            placeholder.style.fontSize = "var(--font-size-xs)";
+            placeholder.style.fontStyle = "italic";
+            placeholder.style.opacity = State.watermarkSessionData.opacity;
+            placeholder.innerText = "[Select logo image]";
+            return placeholder;
+        }
+        const img = document.createElement("img");
+        img.className = "watermark-preview-item-image";
+        img.src = State.watermarkSessionData.logoUrl;
+        img.style.opacity = State.watermarkSessionData.opacity;
+        
+        // Size scale based on layout
+        const percentageWidth = State.watermarkSessionData.scale * 100;
+        img.style.width = `${percentageWidth}%`;
+        
+        if (isTiled) {
+            img.style.transform = `rotate(${State.watermarkSessionData.rotation || 0}deg)`;
+        }
+        return img;
+    }
+}
+
+function runWatermark() {
+    if (!State.watermarkSessionData.sessionId) return;
+    
+    if (State.watermarkSessionData.type === "image" && !State.watermarkSessionData.logoFile) {
+        alert("Please select and upload a logo image first.");
+        return;
+    }
+    
+    showLoading(true, "Stamping watermark onto document...", 40);
+    
+    const payload = {
+        session_id: State.watermarkSessionData.sessionId,
+        type: State.watermarkSessionData.type,
+        text: State.watermarkSessionData.text,
+        color: State.watermarkSessionData.color,
+        font_size: State.watermarkSessionData.fontSize,
+        opacity: State.watermarkSessionData.opacity,
+        rotation: State.watermarkSessionData.rotation,
+        scale: State.watermarkSessionData.scale,
+        position: State.watermarkSessionData.position,
+        pages_mode: State.watermarkSessionData.pagesMode,
+        custom_pages: State.watermarkSessionData.customPages
+    };
+    
+    apiWatermarkExecute(State.watermarkSessionData.sessionId, {
+        type: State.watermarkSessionData.type,
+        text: State.watermarkSessionData.text,
+        color: State.watermarkSessionData.color,
+        font_size: State.watermarkSessionData.fontSize,
+        opacity: State.watermarkSessionData.opacity,
+        rotation: State.watermarkSessionData.rotation,
+        scale: State.watermarkSessionData.scale,
+        position: State.watermarkSessionData.position,
+        pages_mode: State.watermarkSessionData.pagesMode,
+        custom_pages: State.watermarkSessionData.customPages
+    })
+    .then(data => {
+        showLoading(false);
+        triggerFileDownload(data.download_url, `watermarked_${State.watermarkSessionData.filename || "document.pdf"}`);
+        
+        setTimeout(() => {
+            alert("Document watermarked successfully! Downloaded version.");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Watermarking failed: " + error.message);
+    });
+}
+
+function closeWatermarkWorkspace() {
+    if (State.watermarkSessionData.sessionId) {
+        cleanupSessionOnServer(State.watermarkSessionData.sessionId);
+    }
+    
+    // Revoke object URL
+    if (State.watermarkSessionData.logoUrl) {
+        URL.revokeObjectURL(State.watermarkSessionData.logoUrl);
+    }
+    
+    State.watermarkSessionData = {
+        sessionId: null,
+        filename: "",
+        totalPages: 0,
+        pages: [],
+        currentPage: 0,
+        type: "text",
+        text: "CONFIDENTIAL",
+        color: "#ef4444",
+        fontSize: 36,
+        rotation: 45,
+        scale: 0.3,
+        position: "center",
+        opacity: 0.3,
+        pagesMode: "all",
+        customPages: "",
+        logoUrl: null,
+        logoFile: null
+    };
+    
+    if (watermarkFileInput) watermarkFileInput.value = "";
+    if (watermarkLogoInput) watermarkLogoInput.value = "";
+    if (watermarkVisualOverlay) watermarkVisualOverlay.innerHTML = "";
+    if (watermarkPreviewImage) watermarkPreviewImage.src = "";
+    
+    if (watermarkWorkspaceContainer) watermarkWorkspaceContainer.classList.add("hidden");
+    if (watermarkUploadCard) watermarkUploadCard.classList.remove("hidden");
+    
+    saveAllStates();
+}
+
+// Convert Format tool handlers
+function renderConvertWorkspace() {
+    switchConvertTab(State.convertSessionData.activeTab);
+    
+    if (State.convertSessionData.pdfSessionId) {
+        if (convertPdfUploadCard) convertPdfUploadCard.classList.add("hidden");
+        if (convertPdfWorkspaceContainer) convertPdfWorkspaceContainer.classList.remove("hidden");
+        
+        if (convertPdfFileNameDisplay) {
+            convertPdfFileNameDisplay.innerText = State.convertSessionData.pdfFilename;
+            convertPdfFileNameDisplay.title = State.convertSessionData.pdfFilename;
+        }
+        if (convertImageFormat) convertImageFormat.value = State.convertSessionData.pdfFormat;
+        if (convertImageDpi) {
+            convertImageDpi.value = State.convertSessionData.pdfDpi;
+            if (convertImageDpiLabel) convertImageDpiLabel.innerText = State.convertSessionData.pdfDpi + " DPI";
+        }
+        if (convertPdfPagesMode) {
+            convertPdfPagesMode.value = State.convertSessionData.pdfPagesMode;
+            if (State.convertSessionData.pdfPagesMode === "custom") {
+                if (convertPdfCustomPagesGroup) convertPdfCustomPagesGroup.classList.remove("hidden");
+            } else {
+                if (convertPdfCustomPagesGroup) convertPdfCustomPagesGroup.classList.add("hidden");
+            }
+        }
+        if (convertPdfCustomPagesVal) convertPdfCustomPagesVal.value = State.convertSessionData.pdfCustomPages;
+        
+        renderConvertPdfPage();
+    } else {
+        if (convertPdfUploadCard) convertPdfUploadCard.classList.remove("hidden");
+        if (convertPdfWorkspaceContainer) convertPdfWorkspaceContainer.classList.add("hidden");
+    }
+    
+    if (State.convertSessionData.imgSessionId || (State.convertSessionData.imgFiles && State.convertSessionData.imgFiles.length > 0)) {
+        if (convertImgUploadCard) convertImgUploadCard.classList.add("hidden");
+        if (convertImgWorkspaceContainer) convertImgWorkspaceContainer.classList.remove("hidden");
+        
+        renderConvertImageGrid();
+    } else {
+        if (convertImgUploadCard) convertImgUploadCard.classList.remove("hidden");
+        if (convertImgWorkspaceContainer) convertImgWorkspaceContainer.classList.add("hidden");
+    }
+}
+
+function switchConvertTab(tab) {
+    State.convertSessionData.activeTab = tab;
+    saveAllStates();
+    
+    if (tab === "pdf-to-img") {
+        convertTabsPdfToImg.forEach(btn => btn.classList.add("active"));
+        convertTabsImgToPdf.forEach(btn => btn.classList.remove("active"));
+        if (convertPdfToImgWorkspace) convertPdfToImgWorkspace.classList.remove("hidden");
+        if (convertImgToPdfWorkspace) convertImgToPdfWorkspace.classList.add("hidden");
+    } else {
+        convertTabsPdfToImg.forEach(btn => btn.classList.remove("active"));
+        convertTabsImgToPdf.forEach(btn => btn.classList.add("active"));
+        if (convertPdfToImgWorkspace) convertPdfToImgWorkspace.classList.add("hidden");
+        if (convertImgToPdfWorkspace) convertImgToPdfWorkspace.classList.remove("hidden");
+    }
+}
+
+function handleConvertPdfSelect(e) {
+    if (e.target.files.length > 0) {
+        uploadConvertPdfFile(e.target.files[0]);
+    }
+}
+
+function handleConvertPdfDrop(e) {
+    e.preventDefault();
+    if (convertPdfDropZone) convertPdfDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadConvertPdfFile(e.dataTransfer.files[0]);
+    }
+}
+
+function uploadConvertPdfFile(file) {
+    if (!file.name.endsWith(".pdf") && !file.name.endsWith(".PDF")) {
+        alert("Please select a valid PDF file.");
+        return;
+    }
+    
+    showLoading(true, "Uploading PDF for format conversion...", 30);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    apiConvertUploadPdf(file)
+    .then(data => {
+        showLoading(false);
+        initializeConvertPdfWorkspace(data);
+    })
+    .catch(err => {
+        showLoading(false);
+        alert("Upload failed: " + err.message);
+        if (convertPdfFileInput) convertPdfFileInput.value = "";
+    });
+}
+
+function initializeConvertPdfWorkspace(data) {
+    State.convertSessionData.pdfSessionId = data.session_id;
+    State.convertSessionData.pdfFilename = data.filename;
+    State.convertSessionData.pdfTotalPages = data.total_pages;
+    State.convertSessionData.pdfPages = data.pages;
+    State.convertSessionData.pdfCurrentPage = 0;
+    
+    if (convertPdfFileNameDisplay) {
+        convertPdfFileNameDisplay.innerText = data.filename;
+        convertPdfFileNameDisplay.title = data.filename;
+    }
+    
+    if (convertPdfUploadCard) convertPdfUploadCard.classList.add("hidden");
+    if (convertPdfWorkspaceContainer) convertPdfWorkspaceContainer.classList.remove("hidden");
+    
+    renderConvertPdfPage();
+    saveAllStates();
+}
+
+function renderConvertPdfPage() {
+    if (!State.convertSessionData.pdfSessionId) return;
+    
+    const pageNum = State.convertSessionData.pdfCurrentPage;
+    const page = State.convertSessionData.pdfPages[pageNum];
+    
+    if (convertPdfPreviewImage) convertPdfPreviewImage.src = page.image_url;
+    if (convertPdfCurrentPageNum) convertPdfCurrentPageNum.innerText = pageNum + 1;
+    if (convertPdfTotalPagesNum) convertPdfTotalPagesNum.innerText = State.convertSessionData.pdfTotalPages;
+    
+    if (convertPdfPreviewPageCard) {
+        convertPdfPreviewPageCard.style.aspectRatio = `${page.width} / ${page.height}`;
+    }
+}
+
+function handleConvertImgSelect(e) {
+    if (e.target.files.length > 0) {
+        uploadConvertImages(e.target.files);
+    }
+}
+
+function handleConvertImgDrop(e) {
+    e.preventDefault();
+    if (convertImgDropZone) convertImgDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+        uploadConvertImages(e.dataTransfer.files);
+    }
+}
+
+function uploadConvertImages(files) {
+    const validFiles = Array.from(files).filter(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        return ["png", "jpg", "jpeg", "webp"].includes(ext);
+    });
+    
+    if (validFiles.length === 0) {
+        alert("Please select valid image files (PNG, JPG/JPEG, or WEBP).");
+        return;
+    }
+    
+    showLoading(true, "Uploading image assets...", 30);
+    
+    const formData = new FormData();
+    validFiles.forEach(file => {
+        formData.append("files", file);
+    });
+    
+    if (State.convertSessionData.imgSessionId) {
+        formData.append("session_id", State.convertSessionData.imgSessionId);
+    }
+    
+    apiConvertUploadImages(files, State.convertSessionData.imgSessionId)
+    .then(data => {
+        showLoading(false);
+        State.convertSessionData.imgSessionId = data.session_id;
+        State.convertSessionData.imgFiles = State.convertSessionData.imgFiles.concat(data.images);
+        
+        if (convertImgUploadCard) convertImgUploadCard.classList.add("hidden");
+        if (convertImgWorkspaceContainer) convertImgWorkspaceContainer.classList.remove("hidden");
+        
+        renderConvertImageGrid();
+        saveAllStates();
+    })
+    .catch(err => {
+        showLoading(false);
+        alert("Upload failed: " + err.message);
+        if (convertImgFileInput) convertImgFileInput.value = "";
+    });
+}
+
+function renderConvertImageGrid() {
+    if (!convertImageGrid) return;
+    convertImageGrid.innerHTML = "";
+    
+    const count = State.convertSessionData.imgFiles.length;
+    if (convertImgCountDisplay) {
+        convertImgCountDisplay.innerText = `${count} image${count !== 1 ? 's' : ''} uploaded`;
+    }
+    
+    State.convertSessionData.imgFiles.forEach((file, idx) => {
+        const card = document.createElement("div");
+        card.className = "convert-image-card";
+        
+        const idxLabel = document.createElement("div");
+        idxLabel.className = "convert-image-index";
+        idxLabel.innerText = idx + 1;
+        card.appendChild(idxLabel);
+        
+        const thumbContainer = document.createElement("div");
+        thumbContainer.className = "convert-image-thumb-container";
+        
+        const img = document.createElement("img");
+        img.className = "convert-image-thumb";
+        img.src = file.thumbnail_url;
+        img.alt = file.filename;
+        thumbContainer.appendChild(img);
+        card.appendChild(thumbContainer);
+        
+        const details = document.createElement("div");
+        details.className = "convert-image-details";
+        details.innerText = file.filename;
+        card.appendChild(details);
+        
+        const overlay = document.createElement("div");
+        overlay.className = "convert-image-overlay";
+        
+        if (idx > 0) {
+            const leftBtn = document.createElement("button");
+            leftBtn.className = "convert-overlay-btn move-btn";
+            leftBtn.title = "Move Left";
+            leftBtn.innerHTML = '<i class="fa-solid fa-arrow-left"></i>';
+            leftBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                shiftImageOrderLeft(idx);
+            });
+            overlay.appendChild(leftBtn);
+        }
+        
+        const delBtn = document.createElement("button");
+        delBtn.className = "convert-overlay-btn delete-btn";
+        delBtn.title = "Remove";
+        delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+        delBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeCompiledImage(idx);
+        });
+        overlay.appendChild(delBtn);
+        
+        if (idx < count - 1) {
+            const rightBtn = document.createElement("button");
+            rightBtn.className = "convert-overlay-btn move-btn";
+            rightBtn.title = "Move Right";
+            rightBtn.innerHTML = '<i class="fa-solid fa-arrow-right"></i>';
+            rightBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                shiftImageOrderRight(idx);
+            });
+            overlay.appendChild(rightBtn);
+        }
+        
+        card.appendChild(overlay);
+        convertImageGrid.appendChild(card);
+    });
+}
+
+function shiftImageOrderLeft(idx) {
+    if (idx <= 0) return;
+    const list = State.convertSessionData.imgFiles;
+    const temp = list[idx - 1];
+    list[idx - 1] = list[idx];
+    list[idx] = temp;
+    
+    renderConvertImageGrid();
+    saveAllStates();
+}
+
+function shiftImageOrderRight(idx) {
+    const list = State.convertSessionData.imgFiles;
+    if (idx >= list.length - 1) return;
+    const temp = list[idx + 1];
+    list[idx + 1] = list[idx];
+    list[idx] = temp;
+    
+    renderConvertImageGrid();
+    saveAllStates();
+}
+
+function removeCompiledImage(idx) {
+    State.convertSessionData.imgFiles.splice(idx, 1);
+    
+    if (State.convertSessionData.imgFiles.length === 0) {
+        closeConvertImgWorkspace();
+    } else {
+        renderConvertImageGrid();
+        saveAllStates();
+    }
+}
+
+function runPdfToImage() {
+    if (!State.convertSessionData.pdfSessionId) return;
+    
+    showLoading(true, "Converting PDF pages into images...", 40);
+    
+    const payload = {
+        session_id: State.convertSessionData.pdfSessionId,
+        format: State.convertSessionData.pdfFormat,
+        dpi: State.convertSessionData.pdfDpi,
+        pages_mode: State.convertSessionData.pdfPagesMode,
+        custom_pages: State.convertSessionData.pdfCustomPages
+    };
+    
+    apiConvertPdfToImage(State.convertSessionData.pdfSessionId, {
+        format: State.convertSessionData.pdfFormat,
+        dpi: State.convertSessionData.pdfDpi,
+        pages_mode: State.convertSessionData.pdfPagesMode,
+        custom_pages: State.convertSessionData.pdfCustomPages
+    })
+    .then(data => {
+        showLoading(false);
+        const name = State.convertSessionData.pdfFilename.split('.').slice(0, -1).join('.');
+        const ext = data.is_zip ? "zip" : State.convertSessionData.pdfFormat;
+        triggerFileDownload(data.download_url, `converted_${name}.${ext}`);
+        
+        setTimeout(() => {
+            alert("PDF pages converted successfully!");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Conversion failed: " + error.message);
+    });
+}
+
+function runImageToPdf() {
+    if (!State.convertSessionData.imgSessionId || State.convertSessionData.imgFiles.length === 0) return;
+    
+    showLoading(true, "Compiling images into PDF document...", 40);
+    
+    const imageIds = State.convertSessionData.imgFiles.map(f => f.file_id);
+    const payload = {
+        session_id: State.convertSessionData.imgSessionId,
+        images: imageIds,
+        fit_mode: convertPdfFitMode.value,
+        page_size: convertPageSize.value,
+        orientation: convertPageOrientation.value
+    };
+    
+    apiConvertImageToPdf(State.convertSessionData.imgSessionId, {
+        images: imageIds,
+        fit_mode: convertPdfFitMode.value,
+        page_size: convertPageSize.value,
+        orientation: convertPageOrientation.value
+    })
+    .then(data => {
+        showLoading(false);
+        triggerFileDownload(data.download_url, "compiled_images.pdf");
+        
+        setTimeout(() => {
+            alert("Images compiled successfully! Downloaded PDF.");
+            returnToDashboard();
+        }, 1000);
+    })
+    .catch(error => {
+        showLoading(false);
+        alert("Compilation failed: " + error.message);
+    });
+}
+
+function closeConvertPdfWorkspace() {
+    if (State.convertSessionData.pdfSessionId) {
+        cleanupSessionOnServer(State.convertSessionData.pdfSessionId);
+    }
+    
+    State.convertSessionData.pdfSessionId = null;
+    State.convertSessionData.pdfFilename = "";
+    State.convertSessionData.pdfTotalPages = 0;
+    State.convertSessionData.pdfPages = [];
+    State.convertSessionData.pdfCurrentPage = 0;
+    
+    if (convertPdfFileInput) convertPdfFileInput.value = "";
+    if (convertPdfPreviewImage) convertPdfPreviewImage.src = "";
+    
+    if (convertPdfWorkspaceContainer) convertPdfWorkspaceContainer.classList.add("hidden");
+    if (convertPdfUploadCard) convertPdfUploadCard.classList.remove("hidden");
+    
+    saveAllStates();
+}
+
+function closeConvertImgWorkspace() {
+    if (State.convertSessionData.imgSessionId) {
+        cleanupSessionOnServer(State.convertSessionData.imgSessionId);
+    }
+    
+    State.convertSessionData.imgSessionId = null;
+    State.convertSessionData.imgFiles = [];
+    
+    if (convertImgFileInput) convertImgFileInput.value = "";
+    if (convertImageGrid) convertImageGrid.innerHTML = "";
+    
+    if (convertImgWorkspaceContainer) convertImgWorkspaceContainer.classList.add("hidden");
+    if (convertImgUploadCard) convertImgUploadCard.classList.remove("hidden");
+    
+    saveAllStates();
+}
+
+function closeConvertWorkspace() {
+    if (State.convertSessionData.pdfSessionId) {
+        cleanupSessionOnServer(State.convertSessionData.pdfSessionId);
+    }
+    if (State.convertSessionData.imgSessionId) {
+        cleanupSessionOnServer(State.convertSessionData.imgSessionId);
+    }
+    
+    State.convertSessionData = {
+        activeTab: "pdf-to-img",
+        pdfSessionId: null,
+        pdfFilename: "",
+        pdfTotalPages: 0,
+        pdfPages: [],
+        pdfCurrentPage: 0,
+        pdfFormat: "png",
+        pdfDpi: 150,
+        pdfPagesMode: "all",
+        pdfCustomPages: "",
+        imgSessionId: null,
+        imgFiles: []
+    };
+    
+    if (convertPdfFileInput) convertPdfFileInput.value = "";
+    if (convertImgFileInput) convertImgFileInput.value = "";
+    if (convertPdfPreviewImage) convertPdfPreviewImage.src = "";
+    if (convertImageGrid) convertImageGrid.innerHTML = "";
+    
+    if (convertPdfWorkspaceContainer) convertPdfWorkspaceContainer.classList.add("hidden");
+    if (convertPdfUploadCard) convertPdfUploadCard.classList.remove("hidden");
+    if (convertImgWorkspaceContainer) convertImgWorkspaceContainer.classList.add("hidden");
+    if (convertImgUploadCard) convertImgUploadCard.classList.remove("hidden");
+    
+    saveAllStates();
+}
+
+
+
+// Expose callback handlers to window for canvas.js imports
+window.toggleFindingRedaction = toggleFindingRedaction;
+window.updateRedactionCount = updateRedactionCount;
