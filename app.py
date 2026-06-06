@@ -576,7 +576,11 @@ async def merge_execute(req: MergeExecuteRequest):
                 raise HTTPException(status_code=400, detail=f"File {file_id} not found in this session.")
             
             doc = fitz.open(file_path)
-            merged_doc.insert_pdf(doc)
+            try:
+                merged_doc.insert_pdf(doc)
+            except Exception as e:
+                logger.warning(f"Failed to insert PDF {file_id} with widgets, retrying without widgets: {e}")
+                merged_doc.insert_pdf(doc, widgets=False)
             doc.close()
             
         merged_doc.save(output_path)
@@ -1082,7 +1086,11 @@ async def organize_execute(req: OrganizeRequest):
                 out_doc.new_page(width=width, height=height)
             else:
                 # Insert original page into output document
-                out_doc.insert_pdf(src_doc, from_page=item.page_num, to_page=item.page_num)
+                try:
+                    out_doc.insert_pdf(src_doc, from_page=item.page_num, to_page=item.page_num)
+                except Exception as e:
+                    logger.warning(f"Failed to insert page {item.page_num} with widgets, retrying without widgets: {e}")
+                    out_doc.insert_pdf(src_doc, from_page=item.page_num, to_page=item.page_num, widgets=False)
             
             # Retrieve the newly inserted page
             page = out_doc[-1]
